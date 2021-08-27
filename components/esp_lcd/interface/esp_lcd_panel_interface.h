@@ -119,6 +119,8 @@ struct esp_lcd_panel_t {
      *          - ESP_ERR_NOT_SUPPORTED if this function is not supported by the panel
      */
     esp_err_t (*disp_off)(esp_lcd_panel_t *panel, bool off);
+
+    esp_err_t (*write_reg)(esp_lcd_panel_t *panel, uint8_t cmd, uint8_t *data, uint8_t len);
 };
 
 #ifdef __cplusplus

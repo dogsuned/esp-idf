@@ -63,3 +63,10 @@ esp_err_t esp_lcd_panel_disp_off(esp_lcd_panel_handle_t panel, bool off)
     ESP_RETURN_ON_FALSE(panel, ESP_ERR_INVALID_ARG, TAG, "invalid panel handle");
     return panel->disp_off(panel, off);
 }
+
+esp_err_t esp_lcd_panel_write_reg(esp_lcd_panel_handle_t panel, uint8_t cmd, uint8_t *data, uint8_t len)
+{
+    ESP_RETURN_ON_FALSE(panel, ESP_ERR_INVALID_ARG, TAG, "invalid panel handle");
+    return panel->write_reg(panel, cmd, data, len);
+}
+

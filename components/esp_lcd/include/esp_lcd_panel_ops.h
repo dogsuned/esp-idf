@@ -121,6 +121,8 @@ esp_err_t esp_lcd_panel_invert_color(esp_lcd_panel_handle_t panel, bool invert_c
  */
 esp_err_t esp_lcd_panel_disp_off(esp_lcd_panel_handle_t panel, bool off);
 
+esp_err_t esp_lcd_panel_write_reg(esp_lcd_panel_handle_t panel, uint8_t cmd, uint8_t *data, uint8_t len);
+
 #ifdef __cplusplus
 }
 #endif
