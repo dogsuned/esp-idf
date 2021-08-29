@@ -224,7 +224,6 @@ static esp_err_t panel_iti9341_draw_bitmap(esp_lcd_panel_t *panel, int x_start, 
     }, 4);
     // transfer frame buffer
     size_t len = (x_end - x_start) * (y_end - y_start) * iti9341->bits_per_pixel / 8;
-    printf("----------> pixel: %d, draw len: %d\n", iti9341->bits_per_pixel, len);
     esp_lcd_panel_io_tx_color(io, LCD_CMD_RAMWR, 8, color_data, len);
 
     return ESP_OK;
