@@ -5,6 +5,7 @@ set(srcs "src/esp_lcd_common.c"
          "src/esp_lcd_panel_io_i80.c"
          "src/esp_lcd_panel_ssd1306.c"
          "src/esp_lcd_panel_st7789.c"
+         "src/esp_lcd_panel_iti9431.c"
          "src/esp_lcd_panel_ops.c"
          "src/esp_lcd_rgb_panel.c")
 set(includes "include" "interface")
