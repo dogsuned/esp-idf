@@ -115,6 +115,15 @@ static esp_err_t esp_load_wolfssl_verify_buffer(esp_tls_t *tls, const unsigned c
     }
 }
 
+void *esp_wolfssl_get_ssl_context(esp_tls_t *tls)
+{
+    if (tls == NULL) {
+        ESP_LOGE(TAG, "Invalid arguments");
+        return NULL;
+    }
+    return (void*)tls->priv_ssl;
+}
+
 esp_err_t esp_create_wolfssl_handle(const char *hostname, size_t hostlen, const void *cfg, esp_tls_t *tls)
 {
 #ifdef CONFIG_ESP_DEBUG_WOLFSSL
@@ -168,7 +177,13 @@ exit:
 static esp_err_t set_client_config(const char *hostname, size_t hostlen, esp_tls_cfg_t *cfg, esp_tls_t *tls)
 {
     int ret = WOLFSSL_FAILURE;
+
+#ifdef WOLFSSL_TLS13
+    tls->priv_ctx = (void *)wolfSSL_CTX_new(wolfTLSv1_3_client_method());
+#else
     tls->priv_ctx = (void *)wolfSSL_CTX_new(wolfTLSv1_2_client_method());
+#endif
+
     if (!tls->priv_ctx) {
         ESP_LOGE(TAG, "Set wolfSSL ctx failed");
         ESP_INT_EVENT_TRACKER_CAPTURE(tls->error_handle, ESP_TLS_ERR_TYPE_WOLFSSL, ret);
@@ -310,7 +325,13 @@ static esp_err_t set_client_config(const char *hostname, size_t hostlen, esp_tls
 static esp_err_t set_server_config(esp_tls_cfg_server_t *cfg, esp_tls_t *tls)
 {
     int ret = WOLFSSL_FAILURE;
+
+#ifdef WOLFSSL_TLS13
+    tls->priv_ctx = (void *)wolfSSL_CTX_new(wolfTLSv1_3_server_method());
+#else
     tls->priv_ctx = (void *)wolfSSL_CTX_new(wolfTLSv1_2_server_method());
+#endif
+
     if (!tls->priv_ctx) {
         ESP_LOGE(TAG, "Set wolfSSL ctx failed");
         return ESP_ERR_WOLFSSL_CTX_SETUP_FAILED;
@@ -409,7 +430,7 @@ ssize_t esp_wolfssl_read(esp_tls_t *tls, char *data, size_t datalen)
 ssize_t esp_wolfssl_write(esp_tls_t *tls, const char *data, size_t datalen)
 {
     ssize_t ret = wolfSSL_write( (WOLFSSL *)tls->priv_ssl, (unsigned char *) data, datalen);
-    if (ret < 0) {
+    if (ret <= 0) {
         int err = wolfSSL_get_error( (WOLFSSL *)tls->priv_ssl, ret);
         if (err != WOLFSSL_ERROR_WANT_READ  && err != WOLFSSL_ERROR_WANT_WRITE) {
             ESP_INT_EVENT_TRACKER_CAPTURE(tls->error_handle, ESP_TLS_ERR_TYPE_WOLFSSL, -err);

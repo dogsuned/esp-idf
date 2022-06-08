@@ -1,4 +1,4 @@
-ESP32-PICO-DevKitM-2 
+ESP32-PICO-DevKitM-2
 **********************
 
 :link_to_translation:`en:[English]`
@@ -6,11 +6,11 @@ ESP32-PICO-DevKitM-2
 概述
 ======
 
-ESP32-PICO-DevKitM-2 是一款基于 `ESP32 <https://www.espressif.com/zh-hans/products/socs/esp32>`_ 的乐鑫开发板，板上搭载 `ESP32-PICO-MINI-02 <https://www.espressif.com/zh-hans/products/modules>`_ 模组。ESP32-PICO-MINI-02 模组具备完整的 Wi-Fi 和蓝牙功能。
+ESP32-PICO-DevKitM-2 是一款基于 `ESP32 <https://www.espressif.com/zh-hans/products/socs/esp32>`_ 的乐鑫开发板，板上搭载 `ESP32-PICO-MINI-02(02U) <https://www.espressif.com/zh-hans/products/modules>`_ 模组。ESP32-PICO-MINI-02(02U) 模组具备完整的 Wi-Fi 和蓝牙功能。
 
 ESP32-PICO-DevKitM-2 开发板同时集成了 USB-to-UART 桥接电路，方便开发人员直接通过 PC 的 USB 端口直接进行固件烧录和调试。
 
-为方便硬件连接，ESP32-PICO-MINI-02 上的所有 IO 信号和系统电源管脚均引出至开发板两侧焊盘 (18 x 0.1")。上述 18 个焊盘也均引出至排针，可使用杜邦线连接。
+为方便硬件连接，ESP32-PICO-MINI-02(02U) 上的所有 IO 信号和系统电源管脚均引出至开发板两侧焊盘 (18 x 0.1")。上述 18 个焊盘也均引出至排针，可使用杜邦线连接。
 
 .. note::
 
@@ -44,7 +44,7 @@ ESP32-PICO-DevKitM-2 为用户提供了基于 ESP32 芯片应用开发的硬件�
 组件描述
 ----------
 
-ESP32-PICO-DevKitM-2 开发板的主要组件、接口及控制方式见下图。
+ESP32-PICO-DevKitM-2 开发板的主要组件、接口及控制方式见下图。下文以板载 ESP32-PICO-MINI-02 的开发板为例进行说明。
 
 .. figure:: ../../../_static/esp32-pico-devkitm-2-layout-front.png
     :align: center
@@ -56,20 +56,20 @@ ESP32-PICO-DevKitM-2 开发板的主要组件、接口及控制方式见下图�
 
 从左上角开始，按顺时针顺序，开发板主要组件的描述见下表。
 
-.. list-table:: 
+.. list-table::
    :widths: 10 25
    :header-rows: 1
 
    * - 主要组件
      - 描述
    * - ESP32-PICO-MINI-02
-     - ESP32-PICO-DevKitM-2 开发板的板载模组，搭载 ESP32 SoC 芯片。
+     - ESP32-PICO-DevKitM-2 开发板的板载模组，搭载 ESP32 SoC 芯片。用户也可选择板载 ESP32-PICO-MINI-02U 的开发板。
    * - LDO
      - 5V 转 3.3V 低压差稳压器
    * - USB-to-UART
      - CP2102N：单芯片 USB-to-UART 桥接器，数据传输速率可达 3 Mbps。
    * - Micro-B USB 接口
-     - USB 接口。可为开发板供电，或连接 PC 进行 USB 通信。     
+     - USB 接口。可为开发板供电，或连接 PC 进行 USB 通信。
    * - 5V Power On LED
      - 开发板上电后，红色指示灯亮起。更多信息，见 `相关文档`_ 中提供的原理图。
    * - I/O Connector
@@ -95,6 +95,7 @@ ESP32-PICO-DevKitM-2 开发板的主要组件、接口及控制方式见下图�
 
 软件配置
 """""""""""
+
 请前往 :doc:`../../get-started/index`，在 :ref:`get-started-step-by-step` 一节查看如何快速配置开发环境，将应用程序烧录至 ESP32-PICO-DevKitM-2 开发板。
 
 内含组件和包装方式
@@ -105,14 +106,14 @@ ESP32-PICO-DevKitM-2 开发板的主要组件、接口及控制方式见下图�
 
 如购买样品，每个 ESP32-PICO-DevKitM-2 将单独包装。
 
-零售订单，请前往 https://www.espressif.com/en/company/contact/buy-a-sample。
+零售订单，请前往 https://www.espressif.com/en/contact-us/get-samples。
 
 批量订单
 -----------
 
 如批量购买，ESP32-PICO-DevKitM-2 开发板将以大纸板箱包装。
 
-批量订单请参考 `乐鑫产品订购信息 <https://www.espressif.com/sites/default/files/documentation/espressif_products_ordering_information_cn.pdf>`_ (PDF)。
+批量订单请前往 https://www.espressif.com/zh-hans/contact-us/sales-questions。
 
 硬件参考
 =============
@@ -152,7 +153,7 @@ ESP32-PICO-DevKitM-2 的主要组件和连接方式如下图所示。
 Header J2
 """"""""""""
 
-.. list-table:: 
+.. list-table::
    :widths: 5 5 5 35
    :header-rows: 1
 
@@ -232,12 +233,12 @@ Header J2
      - VDD33 (3V3)
      - P
      - 3.3 V 供电
-       
+
 
 Header J3
 """""""""""""
 
-.. list-table:: 
+.. list-table::
    :widths: 5 5 5 35
    :header-rows: 1
 
@@ -317,7 +318,7 @@ Header J3
      - EXT_5V (5V)
      - P
      - 5V 供电
-                          
+
 
 .. _get-started-pico-devkitm-2-pin-notes:
 
@@ -347,8 +348,8 @@ Header J3
 相关文档
 =========
 
-* `ESP32-PICO-MINI-02 技术规格书 <https://www.espressif.com/sites/default/files/documentation/esp32-pico-mini-02_datasheet_cn.pdf>`_ (PDF)
-* `乐鑫产品订购信息 <https://www.espressif.com/sites/default/files/documentation/espressif_products_ordering_information_cn.pdf>`_ (PDF) 
+* `ESP32-PICO-MINI-02 & ESP32-PICO-MINI-02U 技术规格书 <https://www.espressif.com/sites/default/files/documentation/esp32-pico-mini-02_datasheet_cn.pdf>`_ (PDF)
+* `乐鑫产品选型工具 <https://products.espressif.com/#/product-selector?names=>`_
 * `ESP32-PICO-DevKitM-2 原理图 <https://dl.espressif.com/dl/schematics/SCH_ESP32-PICO-DEVKITM-2_V1_0_20200812A.pdf>`_ (PDF)
 * `ESP32-PICO-DevKitM-2 PCB 布局图 <https://dl.espressif.com/dl/schematics/PCB_ESP32-PICO-DevKitM-2_V1.0_20200812.pdf>`_ (PDF)
 

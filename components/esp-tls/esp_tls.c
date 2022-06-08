@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2019-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2019-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -14,6 +14,7 @@
 
 #include <http_parser.h>
 #include "esp_tls.h"
+#include "esp_tls_private.h"
 #include "esp_tls_error_capture_internal.h"
 #include <errno.h>
 static const char *TAG = "esp-tls";
@@ -38,9 +39,14 @@ static const char *TAG = "esp-tls";
 #define _esp_tls_write                      esp_mbedtls_write
 #define _esp_tls_conn_delete                esp_mbedtls_conn_delete
 #define _esp_tls_net_init                   esp_mbedtls_net_init
+#define _esp_tls_get_client_session         esp_mbedtls_get_client_session
+#define _esp_tls_free_client_session        esp_mbedtls_free_client_session
+#define _esp_tls_get_ssl_context            esp_mbedtls_get_ssl_context
 #ifdef CONFIG_ESP_TLS_SERVER
 #define _esp_tls_server_session_create      esp_mbedtls_server_session_create
 #define _esp_tls_server_session_delete      esp_mbedtls_server_session_delete
+#define _esp_tls_server_session_ticket_ctx_init    esp_mbedtls_server_session_ticket_ctx_init
+#define _esp_tls_server_session_ticket_ctx_free    esp_mbedtls_server_session_ticket_ctx_free
 #endif  /* CONFIG_ESP_TLS_SERVER */
 #define _esp_tls_get_bytes_avail            esp_mbedtls_get_bytes_avail
 #define _esp_tls_init_global_ca_store       esp_mbedtls_init_global_ca_store
@@ -62,6 +68,7 @@ static const char *TAG = "esp-tls";
 #define _esp_tls_init_global_ca_store       esp_wolfssl_init_global_ca_store
 #define _esp_tls_set_global_ca_store        esp_wolfssl_set_global_ca_store                 /*!< Callback function for setting global CA store data for TLS/SSL */
 #define _esp_tls_free_global_ca_store       esp_wolfssl_free_global_ca_store                /*!< Callback function for freeing global ca store for TLS/SSL */
+#define _esp_tls_get_ssl_context            esp_wolfssl_get_ssl_context
 #else   /* ESP_TLS_USING_WOLFSSL */
 #error "No TLS stack configured"
 #endif
@@ -86,14 +93,21 @@ static ssize_t tcp_write(esp_tls_t *tls, const char *data, size_t datalen)
     return send(tls->sockfd, data, datalen, 0);
 }
 
+ssize_t esp_tls_conn_read(esp_tls_t *tls, void  *data, size_t datalen)
+{
+    return tls->read(tls, (char *)data, datalen);
+
+}
+
+ssize_t esp_tls_conn_write(esp_tls_t *tls, const void  *data, size_t datalen)
+{
+    return tls->write(tls, (char *)data, datalen);
+
+}
+
 /**
  * @brief      Close the TLS connection and free any allocated resources.
  */
-void esp_tls_conn_delete(esp_tls_t *tls)
-{
-    esp_tls_conn_destroy(tls);
-}
-
 int esp_tls_conn_destroy(esp_tls_t *tls)
 {
     if (tls != NULL) {
@@ -443,43 +457,8 @@ esp_err_t esp_tls_plain_tcp_connect(const char *host, int hostlen, int port, con
     return tcp_connect(host, hostlen, port, cfg, error_handle, sockfd);
 }
 
-/**
- * @brief      Create a new TLS/SSL connection
- */
-esp_tls_t *esp_tls_conn_new(const char *hostname, int hostlen, int port, const esp_tls_cfg_t *cfg)
-{
-    esp_tls_t *tls = esp_tls_init();
-    if (!tls) {
-        return NULL;
-    }
-    /* esp_tls_conn_new() API establishes connection in a blocking manner thus this loop ensures that esp_tls_conn_new()
-       API returns only after connection is established unless there is an error*/
-    size_t start = xTaskGetTickCount();
-    while (1) {
-        int ret = esp_tls_low_level_conn(hostname, hostlen, port, cfg, tls);
-        if (ret == 1) {
-            return tls;
-        } else if (ret == -1) {
-            esp_tls_conn_delete(tls);
-            ESP_LOGE(TAG, "Failed to open new connection");
-            return NULL;
-        } else if (ret == 0 && cfg->timeout_ms >= 0) {
-            size_t timeout_ticks = pdMS_TO_TICKS(cfg->timeout_ms);
-            uint32_t expired = xTaskGetTickCount() - start;
-            if (expired >= timeout_ticks) {
-                esp_tls_conn_delete(tls);
-                ESP_LOGE(TAG, "Failed to open new connection in specified timeout");
-                return NULL;
-            }
-        }
-    }
-    return NULL;
-}
-
 int esp_tls_conn_new_sync(const char *hostname, int hostlen, int port, const esp_tls_cfg_t *cfg, esp_tls_t *tls)
 {
-    /* esp_tls_conn_new_sync() is a sync alternative to esp_tls_conn_new_async() with symmetric function prototype
-    it is an alternative to esp_tls_conn_new() which is left for compatibility reasons */
     size_t start = xTaskGetTickCount();
     while (1) {
         int ret = esp_tls_low_level_conn(hostname, hostlen, port, cfg, tls);
@@ -523,9 +502,6 @@ static int get_port(const char *url, struct http_parser_url *u)
     return 0;
 }
 
-/**
- * @brief      Create a new TLS/SSL connection with a given "HTTP" url
- */
 esp_tls_t *esp_tls_conn_http_new(const char *url, const esp_tls_cfg_t *cfg)
 {
     /* Parse URI */
@@ -541,8 +517,23 @@ esp_tls_t *esp_tls_conn_http_new(const char *url, const esp_tls_cfg_t *cfg)
                               get_port(url, &u), cfg, tls) == 1) {
         return tls;
     }
-    esp_tls_conn_delete(tls);
+    esp_tls_conn_destroy(tls);
     return NULL;
+}
+
+/**
+ * @brief      Create a new TLS/SSL connection with a given "HTTP" url
+ */
+int esp_tls_conn_http_new_sync(const char *url, const esp_tls_cfg_t *cfg, esp_tls_t *tls)
+{
+    /* Parse URI */
+    struct http_parser_url u;
+    http_parser_url_init(&u);
+    http_parser_parse_url(url, strlen(url), 0, &u);
+
+    /* Connect to host */
+    return esp_tls_conn_new_sync(&url[u.field_data[UF_HOST].off], u.field_data[UF_HOST].len,
+                                  get_port(url, &u), cfg, tls);
 }
 
 /**
@@ -568,7 +559,50 @@ mbedtls_x509_crt *esp_tls_get_global_ca_store(void)
 }
 
 #endif /* CONFIG_ESP_TLS_USING_MBEDTLS */
+
+#ifdef CONFIG_ESP_TLS_CLIENT_SESSION_TICKETS
+esp_tls_client_session_t *esp_tls_get_client_session(esp_tls_t *tls)
+{
+    return _esp_tls_get_client_session(tls);
+}
+
+void esp_tls_free_client_session(esp_tls_client_session_t *client_session)
+{
+    _esp_tls_free_client_session(client_session);
+}
+#endif /* CONFIG_ESP_TLS_CLIENT_SESSION_TICKETS */
+
+
 #ifdef CONFIG_ESP_TLS_SERVER
+esp_err_t esp_tls_cfg_server_session_tickets_init(esp_tls_cfg_server_t *cfg)
+{
+#if defined(CONFIG_ESP_TLS_SERVER_SESSION_TICKETS)
+    if (!cfg || cfg->ticket_ctx) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    cfg->ticket_ctx = calloc(1, sizeof(esp_tls_server_session_ticket_ctx_t));
+    if (!cfg->ticket_ctx) {
+        return ESP_ERR_NO_MEM;
+    }
+    esp_err_t ret =  _esp_tls_server_session_ticket_ctx_init(cfg->ticket_ctx);
+    if (ret != ESP_OK) {
+        free(cfg->ticket_ctx);
+    }
+    return ret;
+#else
+    return ESP_ERR_NOT_SUPPORTED;
+#endif
+}
+
+void esp_tls_cfg_server_session_tickets_free(esp_tls_cfg_server_t *cfg)
+{
+#if defined(CONFIG_ESP_TLS_SERVER_SESSION_TICKETS)
+    if (cfg && cfg->ticket_ctx) {
+        _esp_tls_server_session_ticket_ctx_free(cfg->ticket_ctx);
+    }
+#endif
+}
+
 /**
  * @brief      Create a server side TLS/SSL connection
  */
@@ -588,6 +622,11 @@ void esp_tls_server_session_delete(esp_tls_t *tls)
 ssize_t esp_tls_get_bytes_avail(esp_tls_t *tls)
 {
     return _esp_tls_get_bytes_avail(tls);
+}
+
+void *esp_tls_get_ssl_context(esp_tls_t *tls)
+{
+    return _esp_tls_get_ssl_context(tls);
 }
 
 esp_err_t esp_tls_get_conn_sockfd(esp_tls_t *tls, int *sockfd)
@@ -614,6 +653,16 @@ esp_err_t esp_tls_get_and_clear_last_error(esp_tls_error_handle_t h, int *esp_tl
     }
     memset(h, 0, sizeof(esp_tls_last_error_t));
     return last_err;
+}
+
+esp_err_t esp_tls_get_error_handle(esp_tls_t *tls, esp_tls_error_handle_t *error_handle)
+{
+    if (!tls || !error_handle) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    *error_handle = tls->error_handle;
+    return ESP_OK;
 }
 
 esp_err_t esp_tls_init_global_ca_store(void)

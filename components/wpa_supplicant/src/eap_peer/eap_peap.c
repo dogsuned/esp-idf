@@ -10,7 +10,7 @@
 #ifdef EAP_PEAP
 #include "utils/common.h"
 #include "crypto/sha1.h"
-#include "tls/tls.h"
+#include "crypto/tls.h"
 #include "eap_peer/eap_tlv_common.h"
 #include "eap_peer/eap_peap_common.h"
 #include "eap_peer/eap_i.h"
@@ -1042,10 +1042,9 @@ continue_req:
 }
 
 
-static struct wpabuf *
-eap_peap_process(struct eap_sm *sm, void *priv,
-		 struct eap_method_ret *ret,
-		 const struct wpabuf *reqData)
+static struct wpabuf * eap_peap_process(struct eap_sm *sm, void *priv,
+					struct eap_method_ret *ret,
+					const struct wpabuf *reqData)
 {
 	const struct eap_hdr *req;
 	size_t left;
@@ -1095,6 +1094,14 @@ eap_peap_process(struct eap_sm *sm, void *priv,
 						  EAP_TYPE_PEAP,
 						  data->peap_version, id, pos,
 						  left, &resp);
+
+		if (res < 0) {
+			wpa_printf(MSG_DEBUG,
+				   "EAP-PEAP: TLS processing failed");
+			ret->methodState = METHOD_DONE;
+			ret->decision = DECISION_FAIL;
+			return resp;
+		}
 
 		if (tls_connection_established(sm->ssl_ctx, data->ssl.conn)) {
 			char label[24];

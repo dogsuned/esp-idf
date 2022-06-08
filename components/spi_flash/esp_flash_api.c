@@ -1,22 +1,15 @@
-// Copyright 2015-2019 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/param.h>
 #include <string.h>
 
+#include "esp_memory_utils.h"
 #include "spi_flash_chip_driver.h"
 #include "memspi_host_driver.h"
 #include "esp_log.h"
@@ -24,6 +17,7 @@
 #include "esp_flash_internal.h"
 #include "spi_flash_defs.h"
 #include "esp_rom_caps.h"
+#include "esp_rom_spiflash.h"
 #if CONFIG_IDF_TARGET_ESP32S2
 #include "esp_crypto_lock.h" // for locking flash encryption peripheral
 #endif //CONFIG_IDF_TARGET_ESP32S2
@@ -58,7 +52,7 @@ static const char TAG[] = "spi_flash";
     } while(0)
 #endif // CONFIG_SPI_FLASH_DANGEROUS_WRITE_ALLOWED
 
-#define IO_STR_LEN  7
+#define IO_STR_LEN  10
 
 static const char io_mode_str[][IO_STR_LEN] = {
     "slowrd",
@@ -67,9 +61,12 @@ static const char io_mode_str[][IO_STR_LEN] = {
     "dio",
     "qout",
     "qio",
+    [6 ... 15] = "not used", // reserved io mode for future, not used currently.
+    "opi_str",
+    "opi_dtr",
 };
 
-_Static_assert(sizeof(io_mode_str)/IO_STR_LEN == SPI_FLASH_READ_MODE_MAX, "the io_mode_str should be consistent with the esp_flash_io_mode_t defined in spi_flash_ll.h");
+_Static_assert(sizeof(io_mode_str)/IO_STR_LEN == SPI_FLASH_READ_MODE_MAX, "the io_mode_str should be consistent with the esp_flash_io_mode_t defined in spi_flash_types.h");
 
 esp_err_t esp_flash_read_chip_id(esp_flash_t* chip, uint32_t* flash_id);
 
@@ -236,6 +233,86 @@ esp_err_t IRAM_ATTR esp_flash_init(esp_flash_t *chip)
     }
 
     if (err == ESP_OK) {
+        // Try to set the flash mode to whatever default mode was chosen
+        err = chip->chip_drv->set_io_mode(chip);
+        if (err == ESP_ERR_FLASH_NO_RESPONSE && !esp_flash_is_quad_mode(chip)) {
+            //some chips (e.g. Winbond) don't support to clear QE, treat as success
+            err = ESP_OK;
+        }
+    }
+    // Done: all fields on 'chip' are initialised
+    return rom_spiflash_api_funcs->end(chip, err);
+}
+
+// Note: This function is only used for internal. Only call this function to initialize the main flash.
+// (flash chip on SPI1 CS0)
+esp_err_t IRAM_ATTR esp_flash_init_main(esp_flash_t *chip)
+{
+    // Chip init flow
+    // 1. Read chip id
+    // 2. (optional) Detect chip vendor
+    // 3. Get basic parameters of the chip (size, dummy count, etc.)
+    // 4. Init chip into desired mode (without breaking the cache!)
+    esp_err_t err = ESP_OK;
+    bool octal_mode;
+
+    if (chip == NULL || chip->host == NULL || chip->host->driver == NULL ||
+        ((memspi_host_inst_t*)chip->host)->spi == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    octal_mode = (chip->read_mode >= SPI_FLASH_OPI_FLAG);
+    //read chip id
+    // This can indicate the MSPI support OPI, if the flash works on MSPI in OPI mode, we directly bypass read id.
+    uint32_t flash_id = 0;
+    if (octal_mode) {
+        // bypass the reading but get the flash_id from the ROM variable, to avoid resetting the chip to QSPI mode and read the ID again
+        flash_id = g_rom_flashchip.device_id;
+    } else {
+        int retries = 10;
+        do {
+            err = esp_flash_read_chip_id(chip, &flash_id);
+        } while (err == ESP_ERR_FLASH_NOT_INITIALISED && retries-- > 0);
+    }
+
+    if (err != ESP_OK) {
+        return err;
+    }
+    chip->chip_id = flash_id;
+
+    if (!esp_flash_chip_driver_initialized(chip)) {
+        // Detect chip_drv
+        err = detect_spi_flash_chip(chip);
+        if (err != ESP_OK) {
+            return err;
+        }
+    }
+
+    // Detect flash size
+    uint32_t size;
+    err = esp_flash_get_size(chip, &size);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "failed to get chip size");
+        return err;
+    }
+
+    if (chip->chip_drv->get_chip_caps == NULL) {
+        // chip caps get failed, pass the flash capability check.
+        ESP_LOGW(TAG, "get_chip_caps function pointer hasn't been initialized");
+    } else {
+        if (((chip->chip_drv->get_chip_caps(chip) & SPI_FLASH_CHIP_CAP_32MB_SUPPORT) == 0) && (size > (16 *1024 * 1024))) {
+            ESP_LOGW(TAG, "Detected flash size > 16 MB, but access beyond 16 MB is not supported for this flash model yet.");
+            size = (16 * 1024 * 1024);
+        }
+    }
+
+    ESP_LOGI(TAG, "flash io: %s", io_mode_str[chip->read_mode]);
+    err = rom_spiflash_api_funcs->start(chip);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    if (err == ESP_OK && !octal_mode) {
         // Try to set the flash mode to whatever default mode was chosen
         err = chip->chip_drv->set_io_mode(chip);
         if (err == ESP_ERR_FLASH_NO_RESPONSE && !esp_flash_is_quad_mode(chip)) {
@@ -706,7 +783,11 @@ esp_err_t IRAM_ATTR esp_flash_read(esp_flash_t *chip, void *buffer, uint32_t add
     }
 
     //when the cache is disabled, only the DRAM can be read, check whether we need to receive in another buffer in DRAM.
-    bool direct_read = chip->host->driver->supports_direct_read(chip->host, buffer);
+    bool direct_read = false;
+    //If the buffer is internal already, it's ok to use it directly
+    direct_read |= esp_ptr_in_dram(buffer);
+    //If not, we need to check if the HW support direct write
+    direct_read |= chip->host->driver->supports_direct_read(chip->host, buffer);
     uint8_t* temp_buffer = NULL;
 
     //each time, we at most read this length
@@ -774,7 +855,11 @@ esp_err_t IRAM_ATTR esp_flash_write(esp_flash_t *chip, const void *buffer, uint3
     }
 
     //when the cache is disabled, only the DRAM can be read, check whether we need to copy the data first
-    bool direct_write = chip->host->driver->supports_direct_write(chip->host, buffer);
+    bool direct_write = false;
+    //If the buffer is internal already, it's ok to write it directly
+    direct_write |= esp_ptr_in_dram(buffer);
+    //If not, we need to check if the HW support direct write
+    direct_write |= chip->host->driver->supports_direct_write(chip->host, buffer);
 
     // Indicate whether the bus is acquired by the driver, needs to be released before return
     bool bus_acquired = false;

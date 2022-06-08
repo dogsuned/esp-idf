@@ -8,6 +8,9 @@
   - "tools/kconfig_new/**/*"
   - "CONTRIBUTING.rst"
 
+.patterns-docs-preview: &patterns-docs-preview
+  - "docs/**/*"
+
 .if-protected: &if-protected
   if: '($CI_COMMIT_REF_NAME == "master" || $CI_COMMIT_BRANCH =~ /^release\/v/ || $CI_COMMIT_TAG =~ /^v\d+\.\d+(\.\d+)?($|-)/)'
 
@@ -20,8 +23,8 @@
 .if-label-docs: &if-label-docs
   if: '$BOT_LABEL_DOCS || $CI_MERGE_REQUEST_LABELS =~ /^(?:[^,\n\r]+,)*docs(?:,[^,\n\r]+)*$/i'
 
-.if-label-docs_full: &if-label-docs_full
-  if: '$BOT_LABEL_DOCS_FULL || $CI_MERGE_REQUEST_LABELS =~ /^(?:[^,\n\r]+,)*docs_full(?:,[^,\n\r]+)*$/i'
+.if-label-docs_fast: &if-label-docs_fast
+  if: '$BOT_LABEL_DOCS_FAST || $CI_MERGE_REQUEST_LABELS =~ /^(?:[^,\n\r]+,)*docs_fast(?:,[^,\n\r]+)*$/i'
 
 .if-dev-push: &if-dev-push
   if: '$CI_COMMIT_REF_NAME != "master" && $CI_COMMIT_BRANCH !~ /^release\/v/ && $CI_COMMIT_TAG !~ /^v\d+\.\d+(\.\d+)?($|-)/ && ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "merge_request_event")'
@@ -31,7 +34,7 @@
     - <<: *if-protected
     - <<: *if-label-build_docs
     - <<: *if-label-docs
-    - <<: *if-label-docs_full
+    - <<: *if-label-docs_fast
     - <<: *if-dev-push
       changes: *patterns-docs
 
@@ -39,7 +42,6 @@
 check_readme_links:
   extends:
     - .pre_check_job_template
-    - .doc-rules:build:docs
   tags: ["build", "amd64", "internet"]
   allow_failure: true
   script:
@@ -56,30 +58,30 @@ check_docs_lang_sync:
 .build_docs_template:
   image: $ESP_IDF_DOC_ENV_IMAGE
   variables:
-    PYTHON_VER: 3.6.13
+    PYTHON_VER: 3.7.10
   tags:
     - build_docs
   dependencies: []
   script:
     - cd docs
-    - python -m pip install -r requirements.txt
-    - python ./build_docs.py -bs $DOC_BUILDERS -l $DOCLANG -t $DOCTGT build
+    - pip install -U -r requirements.txt
+    - build-docs -t $DOCTGT -bs $DOC_BUILDERS -l $DOCLANG build
   parallel:
     matrix:
       - DOCLANG: ["en", "zh_CN"]
-        DOCTGT: ["esp32", "esp32s2", "esp32c3"]
+        DOCTGT: ["esp32", "esp32s2", "esp32s3", "esp32c3", "esp32c2"]
 
 check_docs_gh_links:
   image: $ESP_IDF_DOC_ENV_IMAGE
   variables:
-    PYTHON_VER: 3.6.13
+    PYTHON_VER: 3.7.10
   extends:
     - .pre_check_job_template
     - .doc-rules:build:docs
   script:
     - cd docs
-    - python -m pip install -r requirements.txt
-    - python ./build_docs.py gh-linkcheck
+    - pip install -U -r requirements.txt
+    - build-docs gh-linkcheck
 
 # stage: build_doc
 # Add this stage to let the build_docs job run in parallel with build
@@ -99,8 +101,13 @@ build_docs_html_full:
   extends:
     - .build_docs_build_stage_template
   rules:
+    - <<: *if-label-docs_fast
+      when: never
     - <<: *if-protected
-    - <<: *if-label-docs_full
+    - <<: *if-label-build_docs
+    - <<: *if-label-docs
+    - <<: *if-dev-push
+      changes: *patterns-docs
   artifacts:
     when: always
     paths:
@@ -114,12 +121,7 @@ build_docs_html_fast:
   extends:
     - .build_docs_build_stage_template
   rules:
-    - <<: *if-label-docs_full
-      when: never
-    - <<: *if-label-build_docs
-    - <<: *if-label-docs
-    - <<: *if-dev-push
-      changes: *patterns-docs
+    - <<: *if-label-docs_fast
   artifacts:
     when: always
     paths:
@@ -129,20 +131,18 @@ build_docs_html_fast:
   variables:
     DOC_BUILDERS: "html"
     DOCS_FAST_BUILD: "yes"
-  # matrix is redefined to include esp32s3 here
-  # that we can build for S3 MRs during bringup phase without
-  # anything being built and published from master branch
-  parallel:
-    matrix:
-      - DOCLANG: ["en", "zh_CN"]
-        DOCTGT: ["esp32", "esp32s2", "esp32s3", "esp32c3"]
 
 build_docs_pdf:
   extends:
     - .build_docs_build_stage_template
   rules:
+    - <<: *if-label-docs_fast
+      when: never
     - <<: *if-protected
-    - <<: *if-label-docs_full
+    - <<: *if-label-build_docs
+    - <<: *if-label-docs
+    - <<: *if-dev-push
+      changes: *patterns-docs
   artifacts:
     when: always
     paths:
@@ -156,19 +156,18 @@ build_docs_pdf:
     - .before_script_no_sync_submodule
   image: $ESP_IDF_DOC_ENV_IMAGE
   variables:
-    PYTHON_VER: 3.6.13
+    PYTHON_VER: 3.7.10
+    DOCS_BUILD_DIR: "${IDF_PATH}/docs/_build/"
+    PYTHONUNBUFFERED: 1
   stage: test_deploy
   tags:
     - deploy
     - shiny
-  variables:
-    DOCS_BUILD_DIR: "${IDF_PATH}/docs/_build/"
-    PYTHONUNBUFFERED: 1
-  dependencies: []
   script:
     - add_doc_server_ssh_keys $DOCS_DEPLOY_PRIVATEKEY $DOCS_DEPLOY_SERVER $DOCS_DEPLOY_SERVER_USER
-    - export GIT_VER=$(git describe --always)
-    - python ${IDF_PATH}/tools/ci/deploy_docs.py
+    - export GIT_VER=$(git describe --always ${PIPELINE_COMMIT_SHA} --)
+    - pip install -U -r docs/requirements.txt
+    - deploy-docs
 
 # stage: test_deploy
 deploy_docs_preview:
@@ -177,10 +176,15 @@ deploy_docs_preview:
   rules:
     - <<: *if-label-build_docs
     - <<: *if-label-docs
-  dependencies:
-    - build_docs_html_fast
-    - build_docs_html_full
-    - build_docs_pdf
+    - <<: *if-dev-push
+      changes: *patterns-docs-preview
+  needs:
+    - job: build_docs_html_fast
+      optional: true
+    - job: build_docs_html_full
+      optional: true
+    - job: build_docs_pdf
+      optional: true
   variables:
     TYPE: "preview"
     # older branches use DOCS_DEPLOY_KEY, DOCS_SERVER, DOCS_SERVER_USER, DOCS_PATH for preview server so we keep these names for 'preview'
@@ -188,7 +192,7 @@ deploy_docs_preview:
     DOCS_DEPLOY_SERVER: "$DOCS_SERVER"
     DOCS_DEPLOY_SERVER_USER: "$DOCS_SERVER_USER"
     DOCS_DEPLOY_PATH: "$DOCS_PATH"
-    DOCS_DEPLOY_URL_BASE: "https://$CI_DOCKER_REGISTRY/docs/esp-idf"
+    DOCS_DEPLOY_URL_BASE: "https://$DOCS_PREVIEW_SERVER_URL/docs/esp-idf"
 
 # stage: post_deploy
 deploy_docs_production:
@@ -211,6 +215,7 @@ deploy_docs_production:
     DOCS_DEPLOY_SERVER_USER: "$DOCS_PROD_SERVER_USER"
     DOCS_DEPLOY_PATH: "$DOCS_PROD_PATH"
     DOCS_DEPLOY_URL_BASE: "https://docs.espressif.com/projects/esp-idf"
+    DEPLOY_STABLE: 1
 
 check_doc_links:
   extends:
@@ -227,6 +232,5 @@ check_doc_links:
   allow_failure: true
   script:
     - cd docs
-    - python -m pip install -r requirements.txt
-    # At the moment this check will always fail due to multiple known limitations, ignore result
-    - python ./build_docs.py -l $DOCLANG -t $DOCTGT linkcheck || { echo "THERE ARE ISSUES DUE TO KNOWN LIMITATIONS, PLEASE FIX THEM. Nowadays we're ignored them to pass pipeline."; true; }
+    - pip install -U -r requirements.txt
+    - build-docs -t $DOCTGT -l $DOCLANG linkcheck

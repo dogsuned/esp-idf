@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2022 Espressif Systems (Shanghai) CO LTD
+# SPDX-License-Identifier: Apache-2.0
 import os
 import re
 import subprocess
@@ -5,7 +7,8 @@ import sys
 import tempfile
 
 from .constants import PANIC_OUTPUT_DECODE_SCRIPT
-from .output_helpers import Logger, normal_print, red_print, yellow_print
+from .logger import Logger
+from .output_helpers import normal_print, red_print, yellow_print
 from .web_socket_client import WebSocketClient
 
 

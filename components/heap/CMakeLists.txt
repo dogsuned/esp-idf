@@ -1,8 +1,11 @@
 set(srcs
     "heap_caps.c"
     "heap_caps_init.c"
-    "multi_heap.c"
-    "heap_tlsf.c")
+    "multi_heap.c")
+
+if(NOT CONFIG_HEAP_TLSF_USE_ROM_IMPL)
+    list(APPEND srcs "heap_tlsf.c")
+endif()
 
 if(NOT CONFIG_HEAP_POISONING_DISABLED)
     list(APPEND srcs "multi_heap_poisoning.c")
@@ -20,8 +23,11 @@ if(CONFIG_HEAP_TRACING_STANDALONE)
 endif()
 
 # Add SoC memory layout to the sources
-list(APPEND srcs "port/memory_layout_utils.c")
-list(APPEND srcs "port/${target}/memory_layout.c")
+
+if(NOT BOOTLOADER_BUILD)
+    list(APPEND srcs "port/memory_layout_utils.c")
+    list(APPEND srcs "port/${target}/memory_layout.c")
+endif()
 
 
 idf_component_register(SRCS "${srcs}"

@@ -1,4 +1,4 @@
-# OpenThread command line example
+# OpenThread Border Router Example
 
 ## Overview
 
@@ -6,17 +6,35 @@ This example demonstrates an [OpenThread border router](https://openthread.io/gu
 
 ## How to use example
 
-### Hardware connection
+### Hardware Required
 
-To run this example, it's used to use an DevKit C board and connect PIN4 and PIN5 to the UART TX and RX port of another 15.4 capable radio co-processor ([RCP](https://openthread.io/platforms/co-processor?hl=en))
+The following SoCs are required to run this example:
+* An ESP32 series Wi-Fi SoC (ESP32, ESP32-C, ESP32-S, etc) loaded with this ot_br example.
+* An ESP32-H2 802.15.4 SoC loaded with [ot_rcp](../ot_rcp) example.
+* Another ESP32-H2 SoC loaded with [ot_cli](../ot_cli) example. Enable `OPENTHREAD_JOINER` option in menuconfig before compiling the example.
+
+Connect the two SoCs via UART, below is an example setup with ESP32 DevKitC and ESP32-H2 DevKitC:
+![thread_br](image/thread-border-router-esp32-esp32h2.jpg)
+
+ESP32 pin | ESP32-H2 pin
+----------|-------------
+   GND    |      G 
+   GPIO4  |      TX      
+   GPIO5  |      RX
 
 ### Configure the project
 
 ```
 idf.py menuconfig
 ```
+Two ways are provided to setup the Thread Border Router in this example:
 
-You need to configure the `CONFIG_EXAMPLE_WIFI_SSID` and `CONFIG_EXAMPLE_WIFI_PASSWORD` with your access point's ssid and psk.
+- Auto Start
+Enable `OPENTHREAD_BR_AUTO_START`, configure the `CONFIG_EXAMPLE_WIFI_SSID` and `CONFIG_EXAMPLE_WIFI_PASSWORD` with your access point's ssid and psk.
+The device will connect to Wi-Fi and form a Thread network automatically after bootup.
+
+- Manual mode
+Disable `OPENTHREAD_BR_AUTO_START` and enable `OPENTHREAD_CLI_ESP_EXTENSION`. `wifi` command will be added for connecting the device to the Wi-Fi network.
 
 ### Build, Flash, and Run
 
@@ -25,6 +43,58 @@ Build the project and flash it to the board, then run monitor tool to view seria
 ```
 idf.py -p PORT build flash monitor
 ```
+If the `OPENTHREAD_BR_AUTO_START` option is enabled, The device will be connected to the configured Wi-Fi and Thread network automatically then act as the border router.
+
+Otherwise, you need to manually configure the networks with CLI commands.
+
+`wifi` command can be used to configure the Wi-Fi network.
+
+```bash
+> wifi
+--wifi parameter---
+connect
+-s                   :     wifi ssid
+-p                   :     wifi psk
+---example---
+join a wifi:
+ssid: threadcertAP
+psk: threadcertAP    :     wifi connect -s threadcertAP -p threadcertAP
+state                :     get wifi state, disconnect or connect
+---example---
+get wifi state       :     wifi state
+Done
+```
+
+To join a Wi-Fi network, please use the `wifi connect` command:
+
+```bash
+> wifi connect -s threadcertAP -p threadcertAP
+ssid: threadcertAP
+psk: threadcertAP
+I (11331) wifi:wifi driver task: 3ffd06e4, prio:23, stack:6656, core=0
+I (11331) system_api: Base MAC address is not set
+I (11331) system_api: read default base MAC address from EFUSE
+I (11341) wifi:wifi firmware version: 45c46a4
+I (11341) wifi:wifi certification version: v7.0
+
+
+..........
+
+I (13741) esp_netif_handlers: sta ip: 192.168.3.10, mask: 255.255.255.0, gw: 192.168.3.1
+W (13771) wifi:<ba-add>idx:0 (ifx:0, 02:0f:c1:32:3b:2b), tid:0, ssn:2, winSize:64
+wifi sta is connected successfully
+Done
+```
+
+To get the state of the Wi-Fi network:
+
+```bash
+> wifi state
+connected
+Done
+```
+
+For forming the Thread network, please refer to the [ot_cli_README](../ot_cli/README.md).
 
 ## Example Output
 
@@ -44,12 +114,9 @@ I(8139) OPENTHREAD:[NOTE]-MLE-----: Allocate router id 50
 I(8139) OPENTHREAD:[NOTE]-MLE-----: RLOC16 fffe -> c800
 I(8159) OPENTHREAD:[NOTE]-MLE-----: Role Detached -> Leader
 ```
-
-The device will automatically connect to the configured WiFi and Thread network and act as the border router.
-
 ## Using the border agent feature
 
-You need to ot-commissioner on the host machine and another Thread end device running OpenThread cli.
+You need to build ot-commissioner on the host machine and another Thread end device running OpenThread cli.
 
 You can find the guide to build and run ot-commissioner [here](https://openthread.io/guides/commissioner/build).
 
@@ -57,7 +124,7 @@ Make sure to configure the same PSKc as the one in sdkconfig in ot-commisioner's
 
 ### Connect the commissioner to the border router
 
-Note that the target address `192.168.1.100` shall match the actual WiFi IP address of the device.
+Note that the target address `192.168.1.100` shall match the actual Wi-Fi IP address of the device. `49154` is a port number used by the OT commissioner.
 
 ``` bash
 $ commissioner-cli /usr/local/etc/commissioner/non-ccm-config.json
@@ -149,13 +216,13 @@ The device has now joined the same Thread network based on the key set by the co
 
 ## Bidirectional IPv6 connectivity
 
-The border router will automatically publish the prefix and the route table rule to the WiFi network via ICMPv6 router advertisment packages.
+The border router will automatically publish the prefix and the route table rule to the Wi-Fi network via ICMPv6 router advertisement packages.
 
 ### Host configuration
 
 The automatically configure your host's route table rules you need to set these sysctl options:
 
-Please relace `wlan0` with the real name of your WiFi network interface.
+Please replace `wlan0` with the real name of your Wi-Fi network interface.
 ```
 sudo sysctl -w net/ipv6/conf/wlan0/accept_ra=2
 sudo sysctl -w net/ipv6/conf/wlan0/accept_ra_rt_info_max_plen=128
@@ -164,7 +231,7 @@ sudo sysctl -w net/ipv6/conf/wlan0/accept_ra_rt_info_max_plen=128
 For mobile devices, the route table rules will be automatically configured after iOS 14 and Android 8.1.
 
 
-### Testing IPv6 connecitivity 
+### Testing IPv6 connectivity 
 
 Now in the joining device, check the IP addresses:
 
@@ -190,7 +257,7 @@ PING fde6:75ff:def4:3bc3:9e9e:3ef:4245:28b5(fde6:75ff:def4:3bc3:9e9e:3ef:4245:28
 
 ## Service discovery
 
-The newly introduced service registration protocol([SRP](https://datatracker.ietf.org/doc/html/draft-ietf-dnssd-srp-10)) allows devices in the Thread network to register a service. The border router will forward the service to the WiFi network via mDNS.
+The newly introduced service registration protocol([SRP](https://datatracker.ietf.org/doc/html/draft-ietf-dnssd-srp-10)) allows devices in the Thread network to register a service. The border router will forward the service to the Wi-Fi network via mDNS.
 
 Now we'll publish the service `my-service._test._udp` with hostname `test0` and port 12345
 
@@ -205,7 +272,7 @@ Done
 Done
 ```
 
-This service will also become visible on the WiFi network:
+This service will also become visible on the Wi-Fi network:
 
 ```bash
 $ avahi-browse -r _test._udp -t   

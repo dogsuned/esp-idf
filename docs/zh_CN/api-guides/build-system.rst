@@ -1,14 +1,9 @@
-构建系统（CMake 版）
+构建系统
 ********************
 
 :link_to_translation:`en:[English]`
 
 本文档主要介绍 ESP-IDF 构建系统的实现原理以及 ``组件`` 等相关概念。如需您想了解如何组织和构建新的 ESP-IDF 项目或组件，请阅读本文档。
-
-.. only:: esp32
-
-   .. 注解:: 本文档将介绍基于 CMake 的构建系统，它是 ESP-IDF V4.0 及以上版本的默认系统。此外 ESP-IDF 还支持 :doc:`基于 GNU Make 的构建系统 <build-system-legacy>`，基于 GNU Make 的构建系统是 ESP-IDF V4.0 以下版本的默认系统。
-
 
 概述
 ====
@@ -36,7 +31,7 @@ ESP-IDF 可以显式地指定和配置每个组件。在构建项目的时候，
 
 - ``组件`` 是模块化且独立的代码，会被编译成静态库（.a 文件）并链接到应用程序。部分组件由 ESP-IDF 官方提供，其他组件则来源于其它开源项目。
 
-- ``目标`` 特指运行构建后应用程序的硬件设备。ESP-IDF 当前仅支持 ``esp32`` 和 ``esp32s2`` 以及 ``esp32c3`` 这三个硬件目标。
+- ``目标`` 特指运行构建后应用程序的硬件设备。运行 `idf.py --list-targets` 可以查看当前 ESP-IDF 版本中支持目标的完整列表。
 
 请注意，以下内容并不属于项目的组成部分：
 
@@ -55,82 +50,10 @@ idf.py
 ``idf.py`` 命令行工具提供了一个前端，可以帮助您轻松管理项目的构建过程，它管理了以下工具：
 
 - CMake_，配置待构建的项目
-- 命令行构建工具（Ninja_ 或 `GNU Make`）
+- Ninja_，用于构建项目
 - `esptool.py`_，烧录目标硬件设备
 
-:ref:`入门指南 <get-started-configure>` 简要介绍了如何设置 ``idf.py`` 用于配置、构建并烧录项目。
-
-``idf.py`` 应运行在 ESP-IDF 的 ``项目`` 目录下，即包含 ``CMakeLists.txt`` 文件的目录。仅包含 Makefile 的老式项目并不支持 ``idf.py``。
-
-运行 ``idf.py --help`` 查看完整的命令列表。下面总结了最常用的命令：
-
-- ``idf.py set-target <target>`` 会设置构建项目的目标（芯片）。请参考 `选择目标芯片`_。
-- ``idf.py menuconfig`` 会运行 ``menuconfig`` 工具来配置项目。
-- ``idf.py build`` 会构建在当前目录下找到的项目，它包括以下步骤：
-
-  - 根据需要创建 ``build`` 构建目录，它用于保存构建过程的输出文件，可以使用 ``-B`` 选项修改默认的构建目录。
-  - 根据需要运行 CMake_ 来配置项目，为主构建工具生成构建文件。
-  - 运行主构建工具（Ninja_ 或 `GNU Make`）。默认情况下，构建工具会被自动检测，可以使用 ``-G`` 选项显式地指定构建工具。
-
-  构建过程是增量式的，如果自上次构建以来源文件或项目配置没有发生改变，则不会执行任何操作。
-
-- ``idf.py clean`` 会把构建输出的文件从构建目录中删除，从而清理整个项目。下次构建时会强制“重新完整构建”这个项目。清理时，不会删除 CMake 配置输出及其他文件。
-- ``idf.py fullclean`` 会将整个 ``build`` 目录下的内容全部删除，包括所有 CMake 的配置输出文件。下次构建项目时，CMake 会从头开始配置项目。请注意，该命令会递归删除构建目录下的 *所有文件*，请谨慎使用。项目配置文件不会被删除。
-- ``idf.py flash`` 会在必要时自动构建项目，并将生成的二进制程序烧录进目标 {IDF_TARGET_NAME} 设备中。``-p`` 和 ``-b`` 选项可分别设置串口的设备名和烧录时的波特率。
-- ``idf.py monitor`` 用于显示目标 {IDF_TARGET_NAME} 设备的串口输出。``-p`` 选项可用于设置主机端串口的设备名，按下 ``Ctrl-]`` 可退出监视器。更多有关监视器的详情，请参阅 :doc:`tools/idf-monitor`。
-
-多个 ``idf.py`` 命令可合并成一个，例如，``idf.py -p COM4 clean flash monitor`` 会依次清理源码树，构建项目，烧录进目标 {IDF_TARGET_NAME} 设备，最后运行串口监视器。
-
-对于 ``idf.py`` 不知道的指令，``idf.py`` 会尝试将其作为构建系统的目标来执行。
-
-``idf.py`` 命令支持 bash、 zsh 以及 fish shell 的 `自动补全 <https://click.palletsprojects.com/shell-completion/>`_。
-
-要实现实现 shell `自动补全 <https://click.palletsprojects.com/shell-completion/>`_，请先确保您安装了 Python 3.5 以及 `click <https://click.palletsprojects.com/>`_ 7.1 及以上版本（:ref:`请参考这里 <get-started-get-prerequisites>`)。
-
-使用 ``export`` 命令来启用 ``idf.py`` 的自动补全功能（:ref:`请参考这里 <get-started-export>`）。按 TAB 键可实现自动补全。输入 “idf.py -” 后按 TAB 键可自动补全选项。
-
-未来我们也会支持 PowerShell 的自动补全功能。
-
-.. 注解:: 环境变量 ``ESPPORT`` 和 ``ESPBAUD`` 可分别用来设置 ``-p`` 和 ``-b`` 选项的默认值。在命令行中，重新为这两个选项赋值，会覆盖其默认值。
-
-高级命令
-^^^^^^^^
-
-- ``idf.py app``，``idf.py bootloader``，``idf.py partition_table`` 仅可用于从适用的项目中构建应用程序、引导程序或分区表。
-- ``idf.py app-flash`` 等匹配命令，仅将项目的特定部分烧录至 {IDF_TARGET_NAME}。
-- ``idf.py -p PORT erase_flash`` 会使用 esptool.py 擦除 {IDF_TARGET_NAME} 的整个 Flash。
-- ``idf.py size`` 会打印应用程序相关的大小信息，``idf.py size-components`` 和 ``idf.py size-files`` 这两个命令相似，分别用于打印每个组件或源文件的详细信息。如果您在运行 CMake（或 ``idf.py``）时定义了变量 ``-DOUTPUT_JSON=1``，那么输出的格式会变成 JSON 而不是可读文本。
-- ``idf.py reconfigure`` 命令会重新运行 CMake_ （即便无需重新运行）。正常使用时，并不需要运行此命令，但当源码树中添加/删除文件后或更改 CMake cache 变量时，此命令会非常有用，例如，``idf.py -DNAME='VALUE' reconfigure`` 会将 CMake cache 中的变量 ``NAME`` 的值设置为 ``VALUE``。
-- ``idf.py python-clean`` 会从 IDF 目录中删除生成的 Python 字节码，Python 字节码可能会在切换 IDF 和 Python 版本时引发问题，因此建议在切换 Python 后运行该命令。
-
-同时调用多个 ``idf.py`` 命令时，命令的输入顺序并不重要，它们会按照正确的顺序依次执行，并保证每一条命令都生效（即先构建后烧录，先擦除后烧录等）。
-
-idf.py 选项
-^^^^^^^^^^^^^^
-
-运行 ``idf.py --help`` 命令列出所有根级选项。运行 ``idf.py <command> --help`` 命令列出针对某一子命令的选项，如 ``idf.py monitor --help``。下列是一些常用选项：
-
-- ``-C <dir>`` 可用来从默认的当前工作目录覆盖项目目录。
-- ``-B <dir>`` 可用来从项目目录默认的 ``build`` 子目录覆盖构建目录。
-- ``--ccache`` 可用来在编译源文件时启用 CCache_，安装了 CCache_ 工具后可极大缩短编译时间。
-
-请注意，一些旧版本的 CCache 在某些平台上可能会出现 bug，因此如果文件没有按预期重新构建，请尝试禁用 CCache 后再次构建。通过设置环境变量 ``IDF_CCACHE_ENABLE`` 为非零值，可以默认启用 CCache。
-
-- ``-v`` 可以让 ``idf.py`` 和编译系统产生详细的编译输出，对于调试编译问题会非常有用。
-- ``--cmake-warn-uninitialized``（或 ``-w``）会让 CMake 在项目目录内打印未初始化的变量警告（不包括在项目目录外的目录），这一选项只能控制 CMake 内部的 CMake 变量警告，不包括其它类型的编译警告。可以通过设置环境变量 ``IDF_CMAKE_WARN_UNINITIALIZED`` 为非零值，从而永久设置该选项。
-
-开始新项目
------------------
-
-运行 ``idf.py create-project`` 命令可以开始创建您的新项目，运行 ``idf.py create-project --help`` 命令获取更多相关信息。
-
-例如：
-
-.. code-block:: bash
-
-    idf.py create-project --path my_projects my_new_project
-
-以上命令会直接在 my_projects 目录下创建一个名为 my_new_project 的新项目。
+可通过 ``idf.py`` 配置构建系统，具体可参考 :doc:`相关文档 <tools/idf-py>`。
 
 直接使用 CMake
 --------------
@@ -196,7 +119,7 @@ idf.py 选项
 设置 Python 解释器
 ------------------
 
-ESP-IDF 适用于所有支持的 Python 版本。即使您系统中默认的 ``python`` 解释器仍是 Python 2.7，ESP-IDF 也可以使用，但建议您升级至 Python 3。
+ESP-IDF 适用于 Python 3.7 以上版本。
 
 ``idf.py`` 和其他的 Python 脚本会使用默认的 Python 解释器运行，如 ``python``。您可以通过 ``python3 $IDF_PATH/tools/idf.py ...`` 命令切换到别的 Python 解释器，或者您可以通过设置 shell 别名或其他脚本来简化该命令。
 
@@ -363,7 +286,7 @@ ESP-IDF 适用于所有支持的 Python 版本。即使您系统中默认的 ``p
 
 ESP-IDF 在搜索所有待构建的组件时，会按照 ``COMPONENT_DIRS`` 指定的顺序依次进行，这意味着在默认情况下，首先搜索 ESP-IDF 内部组件（``IDF_PATH/components``），然后是 ``EXTRA_COMPONENT_DIRS`` 中的组件，最后是项目组件（``PROJECT_DIR/components``）。如果这些目录中的两个或者多个包含具有相同名字的组件，则使用搜索到的最后一个位置的组件。这就允许将组件复制到项目目录中再修改以覆盖 ESP-IDF 组件，如果使用这种方式，ESP-IDF 目录本身可以保持不变。
 
-.. 注解:: 如果在现有项目中通过将组件移动到一个新位置来覆盖它，项目不会自动看到新组件的路径。请运行 ``idf.py reconfigure`` 命令后（或删除项目构建文件夹）再重新构建。 
+.. 注解:: 如果在现有项目中通过将组件移动到一个新位置来覆盖它，项目不会自动看到新组件的路径。请运行 ``idf.py reconfigure`` 命令后（或删除项目构建文件夹）再重新构建。
 
 .. _minimum_cmakelists:
 
@@ -389,19 +312,6 @@ ESP-IDF 在搜索所有待构建的组件时，会按照 ``COMPONENT_DIRS`` 指�
 还有其它参数可以传递给 ``idf_component_register``，具体可参考 :ref:`here<cmake-component-register>`。
 
 有关更完整的 ``CMakeLists.txt`` 示例，请参阅 `组件依赖示例`_ 和 `组件 CMakeLists 示例`_。
-
-创建新组件
--------------
-
-使用 ``idf.py create-component`` 命令创建新组件。 新组件将包含构建组件所需的一组文件。您可以将组件的头文件纳入到您的项目中，并使用其功能。请运行 ``idf.py create-component --help`` 命令获取更多信息。
-
-示例:
-
-.. code-block:: bash
-
-    idf.py -C components create-component my_component
-
-该示例将在当前工作目录下的子目录 components 中创建一个新的组件。更多关于组件的信息，请参考 :ref:`上文<component-directories>`。
 
 .. _preset_component_variables:
 
@@ -449,7 +359,7 @@ ESP-IDF 在搜索所有待构建的组件时，会按照 ``COMPONENT_DIRS`` 指�
 
 .. highlight:: cmake
 
-在编译特定组件的源文件时，可以使用 ``target_compile_options`` 命令来传递编译器选项::
+在编译特定组件的源文件时，可以使用 `target_compile_options`_  函数来传递编译器选项::
 
   target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-unused-variable)
 
@@ -531,8 +441,8 @@ ESP-IDF 构建系统会在命令行中添加以下 C 预处理器定义：
                                          - engine.c
                                          - include/ - engine.h
                                - spark_plug/  - CMakeLists.txt
-                                              - plug.c
-                                              - plug.h
+                                              - spark_plug.c
+                                              - spark_plug.h
 
 Car 组件
 ^^^^^^^^^
@@ -631,12 +541,14 @@ Spark Plug 组件
 
 ``main`` 组件比较特别，因为它在构建过程中自动依赖所有其他组件。所以不需要向这个组件传递 ``REQUIRES`` 或 ``PRIV_REQUIRES``。有关不再使用 ``main`` 组件时需要更改哪些内容，请参考 :ref:`重命名 main 组件<rename-main>`。
 
+.. _component-common-requirements:
+
 通用组件依赖项
 --------------
 
 为避免重复性工作，各组件都用自动依赖一些“通用” IDF 组件，即使它们没有被明确提及。这些组件的头文件会一直包含在构建系统中。
 
-通用组件包括：cxx、newlib、freertos、esp_hw_support、heap、log、lwip、soc、hal、esp_rom、esp_common、esp_system。
+通用组件包括：cxx、newlib、freertos、esp_hw_support、heap、log、soc、hal、esp_rom、esp_common、esp_system。
 
 在构建中导入组件
 -----------------
@@ -650,12 +562,54 @@ Spark Plug 组件
 
 - 将 ``COMPONENTS`` 设置为所需组件的最小列表，可以显著减少项目的构建时间。
 
+.. _component-circular-dependencies:
+
+循环依赖
+---------------------
+
+一个项目中可能包含组件 A 和组件 B，而组件 A 依赖（``REQUIRES`` 或 ``PRIV_REQUIRES``）组件 B，组件 B 又依赖组件 A。这就是所谓的依赖循环或循环依赖。
+
+CMake 通常会在链接器命令行上重复两次组件库名称来自动处理循环依赖。然而这种方法并不总是有效，还是可能构建失败并出现关于 “Undefined reference to ...” 的链接器错误，这通常是由于引用了循环依赖中某一组件中定义的符号。如果存在较大的循环依赖关系，即 A->B->C->D->A，这种情况极有可能发生。
+
+最好的解决办法是重构组件以消除循环依赖关系。在大多数情况下，没有循环依赖的软件架构具有模块化和分层清晰的特性，并且从长远来看更容易维护。然而，移除循环依赖关系并不容易做到。
+
+要绕过由循环依赖引起的链接器错误，最简单的解决方法是增加其中一个组件库的 CMake `LINK_INTERFACE_MULTIPLICITY`_ 属性。 这会让 CMake 在链接器命令行上对此库及其依赖项重复两次以上。
+
+例如：
+
+.. code-block:: cmake
+
+    set_property(TARGET ${COMPONENT_LIB} APPEND PROPERTY LINK_INTERFACE_MULTIPLICITY 3)
+
+- 这一行应该放在组件 CMakeLists.txt 文件 ``idf_component_register`` 之后。
+- 可以的话，将此行放置在因依赖其他组件而造成循环依赖的组件中。实际上，该行可以放在循环内的任何一个组件中，但建议将其放置在拥有链接器错误提示信息中显示的源文件的组件中，或是放置在定义了链接器错误提示信息中所提到的符号的组件，先从这些组件开始是个不错的选择。
+- 通常将值增加到 3（默认值是 2）就足够了，但如果不起作用，可以尝试逐步增加这个数字。
+- 注意，增加这个选项会使链接器的命令行变长，链接阶段变慢。
+
+高级解决方法：未定义符号
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+如果只有一两个符号导致循环依赖，而所有其他依赖都是线性的，那么有一种替代方法可以避免链接器错误：在链接时将“反向”依赖所需的特定符号指定为未定义符号。
+
+例如，如果组件 A 依赖于组件 B，但组件 B 也需要引用组件 A 的 ``reverse_ops`` （但不依赖组件 A 中的其他内容），那么你可以在组件 B 的 CMakeLists.txt 中添加如下一行，以在链接时避免这出现循环。
+
+.. code-block:: cmake
+
+    # 该符号是由“组件 A”在链接时提供
+    target_link_libraries(${COMPONENT_LIB} INTERFACE "-u reverse_ops")
+
+- ``-u`` 参数意味着链接器将始终在链接中包含此符号，而不管依赖项顺序如何。
+- 该行应该放在组件 CMakeLists.txt 文件中的 ``idf_component_register`` 之后。
+- 如果“组件 B”不需要访问“组件 A”的任何头文件，只需链接几个符号，那么这一行可以用来代替 B 对 A 的任何 “REQUIRES”。这样则进一步简化了构建系统中的组件结构。
+
+请参考 `target_link_libraries`_ 文档以了解更多关于此 CMake 函数的信息。
+
 .. _component-requirements-implementation:
 
 构建系统中依赖处理的实现细节
 ----------------------------
 
-- 在 CMake 配置进程的早期阶段会运行 ``expand_requirements.cmake`` 脚本。该脚本会对所有组件的 CMakeLists.txt 文件进行局部的运算，得到一张组件依赖关系图（此图可能会有闭环）。此图用于在构建目录中生成 ``component_depends.cmake`` 文件。
+- 在 CMake 配置进程的早期阶段会运行 ``expand_requirements.cmake`` 脚本。该脚本会对所有组件的 CMakeLists.txt 文件进行局部的运算，得到一张组件依赖关系图（:ref:`此图可能会有闭环 <component-circular-dependencies>`）。此图用于在构建目录中生成 ``component_depends.cmake`` 文件。
 - CMake 主进程会导入该文件，并以此来确定要包含到构建系统中的组件列表（内部使用的 ``BUILD_COMPONENTS`` 变量）。``BUILD_COMPONENTS`` 变量已排好序，依赖组件会排在前面。由于组件依赖关系图中可能存在闭环，因此不能保证每个组件都满足该排序规则。如果给定相同的组件集和依赖关系，那么最终的排序结果应该是确定的。
 - CMake 会将 ``BUILD_COMPONENTS`` 的值以 “Component names:” 的形式打印出来。
 - 然后执行构建系统中包含的每个组件的配置。
@@ -976,6 +930,8 @@ ExternalProject 的依赖与构建清理
 
 如若需要覆盖此文件的名称或指定多个文件，请设置 ``SDKCONFIG_DEFAULTS`` 环境变量或在顶层 CMakeLists.txt 文件中设置 ``SDKCONFIG_DEFAULTS``。在指定多个文件时，使用分号作为分隔符。未指定完整路径的文件名将以当前项目的相对路径来解析。
 
+一些 IDF 示例中包含了 ``sdkconfig.ci`` 文件。该文件是 CI（持续集成）测试框架的一部分，在正常构建过程中会被忽略。
+
 依赖于硬件目标的 sdkconfig 默认值
 ---------------------------------
 
@@ -1009,44 +965,9 @@ Flash 参数
 构建 Bootloader
 ===============
 
-引导程序默认作为 ``idf.py build`` 的一部分被构建，也可以通过 ``idf.py bootloader`` 来单独构建。
-
 引导程序是 :idf:`/components/bootloader/subproject` 内部独特的“子项目”，它有自己的项目 CMakeLists.txt 文件，能够构建独立于主项目的 ``.ELF`` 和 ``.BIN`` 文件，同时它又与主项目共享配置和构建目录。
 
 子项目通过 :idf_file:`/components/bootloader/project_include.cmake` 文件作为外部项目插入到项目的顶层，主构建进程会运行子项目的 CMake，包括查找组件（主项目使用的组件的子集），生成引导程序专用的配置文件（从主 ``sdkconfig`` 文件中派生）。
-
-.. _selecting-idf-target:
-
-选择目标芯片
-====================
-
-ESP-IDF 支持多款芯片，它们通过在软件中使用不同的 “目标” (target) 名进行区分，具体对应关系如下：
-
-* ``esp32`` — 适用于 ESP32-D0WD、ESP32-D2WD、ESP32-S0WD (ESP-SOLO)、ESP32-U4WDH、ESP32-PICO-D4
-* ``esp32s2``— 适用于 ESP32-S2
-* ``esp32c3``— 适用于 ESP32-C3
-
-在构建项目前，请首先根据您的芯片选择正确的软件目标，具体命令为 ``idf.py set-target <target>``。举例 ::
-
-    idf.py set-target esp32s2
-
-.. important::
-
-    运行 ``idf.py set-target`` 命令将清除 ``build`` 文件夹的内容，并重新生成一个 ``sdkconfig`` 文件。之前的 ``sdkconfig`` 将另存为 ``sdkconfig.old``。
-
-.. note::
-
-    运行 ``idf.py set-target`` 命令相当于分别运行以下几个命令：
-
-    1. 清除 ``build`` 文件夹 (``idf.py fullclean``)
-    2. 移除 ``sdkconfig`` 文件 (``mv sdkconfig sdkconfig.old``)
-    3. 根据选择的“目标”芯片配置项目 (``idf.py -DIDF_TARGET=esp32 reconfigure``)
-
-您也可以将要用的 ``IDF_TARGET`` 设置为环境变量，比如：``export IDF_TARGET=esp32s2``；或设置为 CMake 变量，比如将 ``-DIDF_TARGET=esp32s2`` 以参数形式传递给 CMake 或 idf.py。如果您大多数时间仅使用一款芯片，则将 ``IDF_TARGET`` 配置为环境变量比较方便。
-
-对于特定项目，您可以使用以下方式为 ``IDF_TARGET`` 配置 _default_ 值：把 ``CONFIG_IDF_TARGET`` 的值加入 ``sdkconfig.defaults``。举例而言，配置 ``CONFIG_IDF_TARGET="esp32s2"``。这样一来，除非特别设置（比如使用环境变量、CMake 变量或 ``idf.py set-target`` 命令），否则 ``IDF_TARGET`` 将默认采用 ``CONFIG_IDF_TARGET``。
-
-如果您从未通过以上述任何方式配置过“目标”芯片，则构建系统会默认将 ``esp32`` 设定为“目标”芯片。
 
 .. _write-pure-component:
 
@@ -1095,11 +1016,11 @@ CMake 在许多开源的 C/C++ 项目中广泛使用，用户可以在自己的�
 
 实际的案例请参考 :example:`build_system/cmake/import_lib`。请注意，导入第三方库所需要做的工作可能会因库的不同而有所差异。建议仔细阅读第三方库的文档，了解如何将其导入到其它项目中。阅读第三方库的 CMakeLists.txt 文件以及构建结构也会有所帮助。
 
-用这种方式还可以将第三方库封装成 ESP-IDF 的组件。例如 :component:`mbedtls` 组件就是封装了 `mbedtls 项目 <https://github.com/ARMmbed/mbedtls>`_ 得到的。详情请参考 :component_file:`mbedtls 组件的 CMakeLists.txt 文件 <mbedtls/CMakeLists.txt>`。
+用这种方式还可以将第三方库封装成 ESP-IDF 的组件。例如 :component:`mbedtls` 组件就是封装了 `mbedtls 项目 <https://github.com/Mbed-TLS/mbedtls>`_ 得到的。详情请参考 :component_file:`mbedtls 组件的 CMakeLists.txt 文件 <mbedtls/CMakeLists.txt>`。
 
 每当使用 ESP-IDF 构建系统时，CMake 变量 ``ESP_PLATFORM`` 都会被设置为 1。如果要在通用的 CMake 代码加入 IDF 特定的代码时，可以采用 ``if (ESP_PLATFORM)`` 的形式加以分隔。
 
-外部库中使用 ESP-IDF 组件 
+外部库中使用 ESP-IDF 组件
 --------------------------
 
 上述示例中假设的是外部库 ``foo`` （或 ``import_lib`` 示例中的 ``tinyxml`` 库）除了常见的 API 如 libc、libstdc++ 等外不需要使用其它 ESP-IDF API。如果外部库需要使用其它 ESP-IDF 组件提供的 API，则需要在外部 CMakeLists.txt 文件中通过添加对库目标 ``idf::<componentname>`` 的依赖关系。
@@ -1109,12 +1030,12 @@ CMake 在许多开源的 C/C++ 项目中广泛使用，用户可以在自己的�
   add_library(foo bar.c fizz.cpp buzz.cpp)
 
   if(ESP_PLATFORM)
-    # 在 ESP-IDF 中、 bar.c 需要包含 spi_flash 组件中的 esp_spi_flash.h 
+    # 在 ESP-IDF 中、 bar.c 需要包含 spi_flash 组件中的 esp_spi_flash.h
     target_link_libraries(foo PRIVATE idf::spi_flash)
   endif()
 
 
-组件中使用预建库 
+组件中使用预建库
 =================
 
 .. highlight:: cmake
@@ -1151,11 +1072,11 @@ ESP-IDF 提供了一个模板 CMake 项目，可以基于此轻松创建应用�
   # 导入提供 ESP-IDF CMake 构建系统 API 的 CMake 文件
   include($ENV{IDF_PATH}/tools/cmake/idf.cmake)
 
-  # 在构建中导入 ESP-IDF 组件，可以视作等同 add_subdirectory() 
+  # 在构建中导入 ESP-IDF 组件，可以视作等同 add_subdirectory()
   # 但为 ESP-IDF 构建增加额外的构建过程
   # 具体构建过程
   idf_build_process(esp32)
-  
+
   # 创建项目可执行文件
   # 使用其别名 idf::newlib 将其链接到 newlib 组件
   add_executable(${CMAKE_PROJECT_NAME}.elf main.c)
@@ -1201,7 +1122,7 @@ idf 构建命令
 
 .. code-block:: none
 
-  idf_build_process(target 
+  idf_build_process(target
                     [PROJECT_DIR project_dir]
                     [PROJECT_VER project_ver]
                     [PROJECT_NAME project_name]
@@ -1304,7 +1225,8 @@ idf 组件命令
                          [EMBED_FILES file1 file2 ...]
                          [EMBED_TXTFILES file1 file2 ...]
                          [KCONFIG kconfig]
-                         [KCONFIG_PROJBUILD kconfig_projbuild])
+                         [KCONFIG_PROJBUILD kconfig_projbuild]
+                         [WHOLE_ARCHIVE])
 
 将一个组件注册到构建系统中。就像 ``project()`` CMake 命令一样，该命令应该直接从组件的 CMakeLists.txt 中调用（而不是通过函数或宏），且建议在其他命令之前调用该命令。下面是一些关于在 ``idf_component_register`` 之前 *不能* 调用哪些命令的指南：
 
@@ -1326,12 +1248,13 @@ idf 组件命令
   - REQUIRED_IDF_TARGETS - 指定该组件唯一支持的目标。
   - KCONFIG - 覆盖默认的 Kconfig 文件。
   - KCONFIG_PROJBUILD - 覆盖默认的 Kconfig.projbuild 文件。
+  - WHOLE_ARCHIVE - 如果指定了此参数，链接时会在组件库的前后分别添加 ``-Wl,--whole-archive`` 和 ``-Wl,--no-whole-archive``。这与设置 ``WHOLE_ARCHIVE`` 组件属性的效果一致。
 
 以下内容用于 :ref:`将数据嵌入到组件中<cmake_embed_data>`，并在确定组件是否仅用于配置时被视为源文件。这意味着，即使组件没有指定源文件，如果组件指定了以下其中之一，仍然会在内部为组件创建一个静态库。
 
   - EMBED_FILES - 嵌入组件的二进制文件
   - EMBED_TXTFILES - 嵌入组件的文本文件
-  
+
 .. _cmake-component-properties:
 
 idf 组件属性
@@ -1361,6 +1284,7 @@ idf 组件属性
 - REQUIRED_IDF_TARGETS - 组件支持的目标列表；由 ``idf_component_register``  EMBED_TXTFILES 参数设置。
 - REQUIRES - 公共组件依赖关系列表；由 ``idf_component_register`` REQUIRES 参数设置。
 - SRCS - 组件源文件列表；由 ``idf_component_register`` 的 SRCS 或 SRC_DIRS/EXCLUDE_SRCS 参数设置。
+- WHOLE_ARCHIVE - 如果该属性被设置为 ``TRUE`` （或是其他 CMake 布尔“真”值：1、``ON``、``YES``、``Y`` 等），链接时会在组件库的前后分别添加 ``-Wl,--whole-archive`` 和 ``-Wl,--no-whole-archive`` 选项。这可以强制链接器将每个目标文件包含到可执行文件中，即使该目标文件没有解析来自应用程序其余部分的任何引用。当组件中包含依赖链接时注册的插件或模块时，通常会使用该方法。默认情况下，此属性为 ``FALSE``。可以从组件的 CMakeLists.txt 文件中将其设置为 ``TRUE``。
 
 .. _cmake-file-globbing:
 
@@ -1450,16 +1374,16 @@ ESP-IDF 构建系统的列表文件位于 :idf:`/tools/cmake` 中。实现构建
     :scale: 100%
     :caption: ESP-IDF Build System Process
     :align: center
-    
+
     blockdiag idf-build-system-process {
         初始化 -> 枚举
         枚举 -> 处理
         处理 -> 完成
     }
 
-初始化 
+初始化
 ^^^^^^^
-  
+
  该阶段为构建设置必要的参数。
 
     - 在将 ``idf.cmake`` 导入 ``project.cmake`` 后，将执行以下步骤：
@@ -1495,11 +1419,14 @@ ESP-IDF 构建系统的列表文件位于 :idf:`/tools/cmake` 中。实现构建
 完成
 ^^^^^^^
   该阶段是 ``idf_build_process()`` 剩余的步骤。
-  
+
   - 创建可执行文件并将其链接到组件库中。
   - 生成 project_description.json 等项目元数据文件并且显示所建项目等相关信息。
 
 请参考 :idf_file:`/tools/cmake/project.cmake` 获取更多信息。
+
+
+.. _migrating_from_make:
 
 从 ESP-IDF GNU Make 构建系统迁移到 CMake 构建系统
 =================================================
@@ -1507,23 +1434,9 @@ ESP-IDF 构建系统的列表文件位于 :idf:`/tools/cmake` 中。实现构建
 ESP-IDF CMake 构建系统与旧版的 GNU Make 构建系统在某些方面非常相似，开发者都需要提供 include 目录、源文件等。然而，有一个语法上的区别，即对于 ESP-IDF CMake 构建系统，开发者需要将这些作为参数传递给注册命令 ``idf_component_register``。
 
 自动转换工具
-------------
+-------------------------
 
-.. highlight:: bash
-
-:idf_file:`/tools/cmake/convert_to_cmake.py` 中提供了一个项目自动转换工具。运行此命令时需要加上项目路径，如下所示::
-
-    $IDF_PATH/tools/cmake/convert_to_cmake.py /path/to/project_dir
-
-项目目录必须包含 Makefile 文件，并确保主机已安装 GNU Make (``make``) 工具，并且被添加到了 PATH 环境变量中。
-
-该工具会将项目 Makefile 文件和所有组件的 ``component.mk`` 文件转换为对应的 ``CMakeLists.txt`` 文件。
-
-转换过程如下：该工具首先运行 ``make`` 来展开 ESP-IDF 构建系统设置的变量，然后创建相应的 CMakelists 文件来设置相同的变量。
-
-.. important:: 当转换工具转换一个 ``component.mk`` 文件时，它并不能确定该组件依赖于哪些其他组件。这些信息需要通过编辑新的组件 ``CMakeLists.txt`` 文件并添加 ``REQUIRES`` 和/或 ``PRIV_REQUIRES`` 子句来手动添加。否则，组件中的源文件会因为找不到其他组件的头文件而编译失败。请参考 :ref:`component requirements` 获取更多信息。
-
-转换工具并不能处理复杂的 Makefile 逻辑或异常的目标，这些需要手动转换。
+在 ESP-IDF v4.x 版本中，`tools/cmake/convert_to_cmake.py` 提供了项目自动转换工具。由于该脚本依赖于 `make` 构建系统，所以 v5.0 版本中不包含该脚本。
 
 CMake 中不可用的功能
 --------------------
@@ -1541,7 +1454,7 @@ CMake 中不可用的功能
 - ``COMPONENT_OBJS``：以前，可以以目标文件列表的方式指定组件源，现在，可以通过 ``COMPONENT_SRCS`` 以源文件列表的形式指定组件源。
 - ``COMPONENT_OBJEXCLUDE``：已被 ``COMPONENT_SRCEXCLUDE`` 替换。用于指定源文件（绝对路径或组件目录的相对路径）。
 - ``COMPONENT_EXTRA_CLEAN``：已被 ``ADDITIONAL_MAKE_CLEAN_FILES`` 属性取代，注意，:ref:`CMake 对此项功能有部分限制 <ADDITIONAL_MAKE_CLEAN_FILES_note>`。
-- ``COMPONENT_OWNBUILDTARGET`` & ``COMPONENT_OWNCLEANTARGET``：已被 CMake `外部项目 <ExternalProject>`_ 替代，详细内容请参阅 :ref:`component-build-full-override`。
+- ``COMPONENT_OWNBUILDTARGET`` & ``COMPONENT_OWNCLEANTARGET``：已被 CMake `外部项目 <ExternalProject_>` 替代，详细内容请参阅 :ref:`component-build-full-override`。
 - ``COMPONENT_CONFIG_ONLY``：已被 ``register_config_only_component()`` 函数替代，请参阅 :ref:`config_only_component`。
 - ``CFLAGS``、``CPPFLAGS``、``CXXFLAGS``：已被相应的 CMake 命令替代，请参阅 :ref:`component_build_control`。
 
@@ -1583,7 +1496,7 @@ CMake 中不可用的功能
 .. _target_compile_options: https://cmake.org/cmake/help/v3.5/command/target_compile_options.html
 .. _target_link_libraries: https://cmake.org/cmake/help/v3.5/command/target_link_libraries.html#command:target_link_libraries
 .. _cmake_toolchain_file: https://cmake.org/cmake/help/v3.5/variable/CMAKE_TOOLCHAIN_FILE.html
+.. _LINK_INTERFACE_MULTIPLICITY: https://cmake.org/cmake/help/v3.5/prop_tgt/LINK_INTERFACE_MULTIPLICITY.html
 .. _quirc: https://github.com/dlbeer/quirc
 .. _pyenv: https://github.com/pyenv/pyenv#readme
 .. _virtualenv: https://virtualenv.pypa.io/en/stable/
-.. _CCache: https://ccache.dev/

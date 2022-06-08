@@ -39,5 +39,10 @@ int ieee802_11_parse_candidate_list(const char *pos, u8 *nei_rep,
 const u8 * get_ie(const u8 *ies, size_t len, u8 eid);
 int ieee802_11_parse_elems(struct wpa_supplicant *wpa_s, const u8 *start, size_t len);
 int ieee802_11_ext_capab(const u8 *ie, unsigned int capab);
+const u8 * get_vendor_ie(const u8 *ies, size_t len, u32 vendor_type);
+size_t mbo_add_ie(u8 *buf, size_t len, const u8 *attr, size_t attr_len);
 u8 get_operating_class(u8 chan, int sec_channel);
+int ieee802_11_ie_count(const u8 *ies, size_t ies_len);
+struct wpabuf * ieee802_11_vendor_ie_concat(const u8 *ies, size_t ies_len,
+					    u32 oui_type);
 #endif /* IEEE802_11_COMMON_H */

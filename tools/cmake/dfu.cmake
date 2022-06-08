@@ -8,10 +8,12 @@ function(__add_dfu_targets)
     elseif("${target}" STREQUAL "esp32s2")
         set(dfu_pid "2")
     elseif("${target}" STREQUAL "esp32s3")
-        set(dfu_pid "6")
+        set(dfu_pid "9")
     elseif("${target}" STREQUAL "esp32c3")
         return()
     elseif("${target}" STREQUAL "esp32h2")
+        return()
+    elseif("${target}" STREQUAL "esp32c2")
         return()
     elseif("${target}" STREQUAL "linux")
         return()
@@ -27,6 +29,7 @@ function(__add_dfu_targets)
         -o "${CMAKE_CURRENT_BINARY_DIR}/dfu.bin"
         --json "${CMAKE_CURRENT_BINARY_DIR}/flasher_args.json"
         --pid "${dfu_pid}"
+        --flash-size "${CONFIG_ESPTOOLPY_FLASHSIZE}"
         DEPENDS gen_project_binary bootloader
         VERBATIM
         USES_TERMINAL)

@@ -1,6 +1,8 @@
 eFuse Manager
 =============
 
+{IDF_TARGET_CODING_SCHEMES:default="Reed-Solomon", esp32="3/4 or Repeat"}
+
 
 Introduction
 ------------
@@ -52,8 +54,8 @@ The component has API functions for reading and writing fields. Access to the fi
 
 CSV files:
 
-* common (`esp_efuse_table.csv`) - contains eFuse fields which are used inside the IDF. C-source generation should be done manually when changing this file (run command ``idf.py efuse_common_table``). Note that changes in this file can lead to incorrect operation.
-* custom - (optional and can be enabled by :ref:`CONFIG_EFUSE_CUSTOM_TABLE`) contains eFuse fields that are used by the user in their application. C-source generation should be done manually when changing this file and running ``idf.py efuse_custom_table``.
+* common (`esp_efuse_table.csv`) - contains eFuse fields which are used inside the IDF. C-source generation should be done manually when changing this file (run command ``idf.py efuse-common-table``). Note that changes in this file can lead to incorrect operation.
+* custom - (optional and can be enabled by :ref:`CONFIG_EFUSE_CUSTOM_TABLE`) contains eFuse fields that are used by the user in their application. C-source generation should be done manually when changing this file and running ``idf.py efuse-custom-table``.
 
 
 Description CSV file
@@ -136,7 +138,7 @@ efuse_table_gen.py tool
 
 The tool is designed to generate C-source files from CSV file and validate fields. First of all, the check is carried out on the uniqueness of the names and overlaps of the field bits. If an additional `custom` file is used, it will be checked with the existing `common` file (esp_efuse_table.csv). In case of errors, a message will be displayed and the string that caused the error. C-source files contain structures of type `esp_efuse_desc_t`.
 
-To generate a `common` files, use the following command ``idf.py efuse_common_table`` or:
+To generate a `common` files, use the following command ``idf.py efuse-common-table`` or:
 
 .. code-block:: bash
 
@@ -148,7 +150,7 @@ After generation in the folder $IDF_PATH/components/efuse/`{IDF_TARGET_PATH_NAME
 * `esp_efuse_table.c` file.
 * In `include` folder `esp_efuse_table.c` file.
 
-To generate a `custom` files, use the following command ``idf.py efuse_custom_table`` or:
+To generate a `custom` files, use the following command ``idf.py efuse-custom-table`` or:
 
 .. code-block:: bash
 
@@ -215,6 +217,12 @@ Supported coding scheme
 
 To write some fields into one block, or different blocks in one time, you need to use ``the batch writing mode``. Firstly set this mode through :cpp:func:`esp_efuse_batch_write_begin` function then write some fields as usual using the ``esp_efuse_write_...`` functions. At the end to burn them, call the :cpp:func:`esp_efuse_batch_write_commit` function. It burns prepared data to the eFuse blocks and disables the ``batch recording mode``.
 
+.. note::
+
+    If there is already pre-written data in the eFuse block using the ``{IDF_TARGET_CODING_SCHEMES}`` encoding scheme, then it is not possible to write anything extra (even if the required bits are empty) without breaking the previous encoding data. This encoding data will be overwritten with new encoding data and completely destroyed (however, the payload eFuses are not damaged). It can be related to: CUSTOM_MAC, SPI_PAD_CONFIG_HD, SPI_PAD_CONFIG_CS, etc. Please contact Espressif to order the required pre-burnt eFuses.
+
+    FOR TESTING ONLY (NOT RECOMMENDED): You can ignore or suppress errors that violate encoding scheme data in order to burn the necessary bits in the eFuse block.
+
 eFuse API
 ---------
 
@@ -274,7 +282,7 @@ For frequently used fields, special functions are made, like this :cpp:func:`esp
 How to add a new field
 ----------------------
 
-1. Find a free bits for field. Show `esp_efuse_table.csv` file or run ``idf.py show_efuse_table`` or the next command:
+1. Find a free bits for field. Show `esp_efuse_table.csv` file or run ``idf.py show-efuse-table`` or the next command:
 
 .. code-block:: none
 
@@ -358,15 +366,16 @@ Virtual eFuses
 The Kconfig option :ref:`CONFIG_EFUSE_VIRTUAL` will virtualize eFuse values inside the eFuse Manager, so writes are emulated and no eFuse values are permanently changed. This can be useful for debugging app and unit tests.
 During startup, the eFuses are copied to RAM. All eFuse operations (read and write) are performed with RAM instead of the real eFuse registers.
 
-In addition to the :ref:`CONFIG_EFUSE_VIRTUAL` option there is :ref:`CONFIG_EFUSE_VIRTUAL_KEEP_IN_FLASH` option that adds a feature to keep eFuses in flash memory. To use this mode the partition_table should have the `efuse` partition. partition.csv: ``"efuse_em, data, efuse,   ,   0x2000,"``. 
+In addition to the :ref:`CONFIG_EFUSE_VIRTUAL` option there is :ref:`CONFIG_EFUSE_VIRTUAL_KEEP_IN_FLASH` option that adds a feature to keep eFuses in flash memory. To use this mode the partition_table should have the `efuse` partition. partition.csv: ``"efuse_em, data, efuse,   ,   0x2000,"``.
 During startup, the eFuses are copied from flash or, in case if flash is empty, from real eFuse to RAM and then update flash. This option allows keeping eFuses after reboots (possible to test secure_boot and flash_encryption features with this option).
 
 espefuse.py
 ^^^^^^^^^^^
 
-esptool includes a useful tool for reading/writing {IDF_TARGET_NAME} eFuse bits - `espefuse.py <https://github.com/espressif/esptool/wiki/espefuse>`_.
+esptool includes a useful tool for reading/writing {IDF_TARGET_NAME} eFuse bits - `espefuse.py <https://docs.espressif.com/projects/esptool/en/latest/{IDF_TARGET_PATH_NAME}/espefuse/index.html>`_.
 
    .. include:: inc/espefuse_summary_{IDF_TARGET_NAME}.rst
 
 
-.. include-build-file:: inc/esp_efuse.inc
+.. include-build-file:: inc/components/efuse/{IDF_TARGET_PATH_NAME}/include/esp_efuse.inc
+.. include-build-file:: inc/components/efuse/include/esp_efuse.inc

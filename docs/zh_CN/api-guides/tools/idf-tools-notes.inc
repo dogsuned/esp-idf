@@ -4,6 +4,16 @@
 .. before processing :start-after: and :end-before: options.
 
 
+.. tool-xtensa-esp-elf-gdb-notes
+
+
+---
+
+.. tool-riscv32-esp-elf-gdb-notes
+
+
+---
+
 .. tool-xtensa-esp32-elf-notes
 
 
@@ -42,6 +52,11 @@
 .. tool-cmake-notes
 
 On Linux and macOS, it is recommended to install CMake using the OS package manager. However, for convenience it is possible to install CMake using idf_tools.py along with the other tools.
+
+---
+
+.. tool-xtensa-clang-notes
+
 
 ---
 

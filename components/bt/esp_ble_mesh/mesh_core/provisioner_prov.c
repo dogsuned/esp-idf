@@ -1,16 +1,8 @@
-// Copyright 2017-2019 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2017-2021 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include <string.h>
 #include <errno.h>
@@ -82,6 +74,7 @@ _Static_assert(BLE_MESH_MAX_CONN >= CONFIG_BLE_MESH_PBG_SAME_TIME,
 
 #define START_PAYLOAD_MAX      20
 #define CONT_PAYLOAD_MAX       23
+#define START_LAST_SEG_MAX     2
 
 #define START_LAST_SEG(gpc)    (gpc >> 2)
 #define CONT_SEG_INDEX(gpc)    (gpc >> 2)
@@ -1930,6 +1923,19 @@ static int prov_auth(const uint8_t idx, uint8_t method, uint8_t action, uint8_t 
         /* Provisioner ouput number/string and wait for device's Provisioning Input Complete PDU */
         link[idx].expect = PROV_INPUT_COMPLETE;
 
+        /* NOTE: The Bluetooth SIG recommends that mesh implementations enforce a randomly
+         * selected AuthValue using all of the available bits, where permitted by the
+         * implementation. A large entropy helps ensure that a brute-force of the AuthValue,
+         * even a static AuthValue, cannot normally be completed in a reasonable time (CVE-2020-26557).
+         *
+         * AuthValues selected using a cryptographically secure random or pseudorandom number
+         * generator and having the maximum permitted entropy (128-bits) will be most difficult
+         * to brute-force. AuthValues with reduced entropy or generated in a predictable manner
+         * will not grant the same level of protection against this vulnerability. Selecting a
+         * new AuthValue with each provisioning attempt can also make it more difficult to launch
+         * a brute-force attack by requiring the attacker to restart the search with each
+         * provisioning attempt (CVE-2020-26556).
+         */
         if (input == BLE_MESH_ENTER_STRING) {
             unsigned char str[9] = {'\0'};
             uint8_t j = 0U;
@@ -2312,12 +2318,11 @@ static void prov_confirm(const uint8_t idx, const uint8_t *data)
 
     BT_DBG("Remote Confirm: %s", bt_hex(data, 16));
 
-    /* NOTE: The Bluetooth SIG recommends that potentially vulnerable mesh
-     * provisioners restrict the authentication procedure and not accept
-     * provisioning random and provisioning confirmation numbers from a remote
-     * peer that are the same as those selected by the local device (CVE-2020-26556
-     * & CVE-2020-26560).
-     * */
+    /* NOTE: The Bluetooth SIG recommends that potentially vulnerable mesh provisioners
+     * restrict the authentication procedure and not accept provisioning random and
+     * provisioning confirmation numbers from a remote peer that are the same as those
+     * selected by the local device (CVE-2020-26560).
+     */
     if (!memcmp(data, link[idx].local_conf, 16)) {
         BT_ERR("Confirmation value is identical to ours, rejecting.");
         close_link(idx, CLOSE_REASON_FAILED);
@@ -2534,12 +2539,11 @@ static void prov_random(const uint8_t idx, const uint8_t *data)
 
     BT_DBG("Remote Random: %s", bt_hex(data, 16));
 
-    /* NOTE: The Bluetooth SIG recommends that potentially vulnerable mesh
-     * provisioners restrict the authentication procedure and not accept
-     * provisioning random and provisioning confirmation numbers from a remote
-     * peer that are the same as those selected by the local device (CVE-2020-26556
-     * & CVE-2020-26560).
-     * */
+    /* NOTE: The Bluetooth SIG recommends that potentially vulnerable mesh provisioners
+     * restrict the authentication procedure and not accept provisioning random and
+     * provisioning confirmation numbers from a remote peer that are the same as those
+     * selected by the local device (CVE-2020-26560).
+     */
     if (!memcmp(data, link[idx].rand, 16)) {
         BT_ERR("Random value is identical to ours, rejecting.");
         goto fail;
@@ -2973,6 +2977,12 @@ static void gen_prov_start(const uint8_t idx, struct prov_rx *rx, struct net_buf
     /* Provisioner can not receive zero-length provisioning pdu */
     if (link[idx].rx.buf->len < 1) {
         BT_ERR("Ignoring zero-length provisioning PDU");
+        close_link(idx, CLOSE_REASON_FAILED);
+        return;
+    }
+
+    if (START_LAST_SEG(rx->gpc) > START_LAST_SEG_MAX) {
+        BT_ERR("Invalid SegN 0x%02x", START_LAST_SEG(rx->gpc));
         close_link(idx, CLOSE_REASON_FAILED);
         return;
     }

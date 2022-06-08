@@ -1,5 +1,5 @@
 /*
- * FreeRTOS Kernel V10.2.1
+ * FreeRTOS Kernel V10.4.3
  * Copyright (C) 2019 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -121,10 +121,6 @@ typedef struct {
      * If mux is locked, count is non-zero & represents the number of recursive locks on the mux.
      */
     uint32_t count;
-#ifdef CONFIG_FREERTOS_PORTMUX_DEBUG
-    const char *lastLockedFn;
-    int lastLockedLine;
-#endif
 } portMUX_TYPE;
 
 #define portMUX_FREE_VAL SPINLOCK_FREE
@@ -134,13 +130,8 @@ typedef struct {
 #define portMUX_TRY_LOCK SPINLOCK_NO_WAIT        /* Try to acquire the spinlock a single time only */
 
 // Keep this in sync with the portMUX_TYPE struct definition please.
-#ifndef CONFIG_FREERTOS_PORTMUX_DEBUG
 #define portMUX_INITIALIZER_UNLOCKED                                                                                   \
     { .owner = portMUX_FREE_VAL, .count = 0, }
-#else
-#define portMUX_INITIALIZER_UNLOCKED                                                                                   \
-    { .owner = portMUX_FREE_VAL, .count = 0, .lastLockedFn = "(never locked)", .lastLockedLine = -1 }
-#endif
 
 /* Scheduler utilities. */
 extern void vPortYield(void);
@@ -162,21 +153,8 @@ extern void vPortYieldFromISR(void);
 extern int vPortSetInterruptMask(void);
 extern void vPortClearInterruptMask(int);
 
-void vPortCPUInitializeMutex(portMUX_TYPE *mux);
-void vPortCPUAcquireMutex(portMUX_TYPE *mux);
-bool vPortCPUAcquireMutexTimeout(portMUX_TYPE *mux, int timeout_cycles);
-void vPortCPUReleaseMutex(portMUX_TYPE *mux);
-
 extern void vPortEnterCritical(void);
 extern void vPortExitCritical(void);
-
-extern void esp_vApplicationIdleHook(void);
-extern void esp_vApplicationTickHook(void);
-
-#ifndef CONFIG_FREERTOS_LEGACY_HOOKS
-#define vApplicationIdleHook esp_vApplicationIdleHook
-#define vApplicationTickHook esp_vApplicationTickHook
-#endif /* !CONFIG_FREERTOS_LEGACY_HOOKS */
 
 /* Task function macros as described on the FreeRTOS.org WEB site. */
 #define portTASK_FUNCTION_PROTO(vFunction, pvParameters) void vFunction(void* pvParameters)

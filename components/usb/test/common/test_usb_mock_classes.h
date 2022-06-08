@@ -1,16 +1,8 @@
-// Copyright 2015-2020 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /*
 This header contains bare-bone mock implementations of some device classes in order to test various layers of the USB
@@ -21,13 +13,15 @@ Host stack.
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "usb.h"
+#include "usb/usb_types_ch9.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 // ---------------------------------------------------- MSC SCSI -------------------------------------------------------
+
+extern const char *MSC_CLIENT_TAG;
 
 /*
 Note: The mock MSC SCSI tests requires that USB flash drive be connected. The flash drive should...
@@ -94,23 +88,14 @@ Configuration Descriptor:
 If you're using a flash driver with different endpoints, modify the endpoint descriptors below.
 */
 
-static const usb_desc_ep_t mock_msc_scsi_bulk_out_ep_desc = {
-    .bLength = sizeof(usb_desc_ep_t),
-    .bDescriptorType = USB_B_DESCRIPTOR_TYPE_ENDPOINT,
-    .bEndpointAddress = 0x01,       //EP 1 OUT
-    .bmAttributes = USB_BM_ATTRIBUTES_XFER_BULK,
-    .wMaxPacketSize = 64,           //MPS of 64 bytes
-    .bInterval = 1,
-};
-
-static const usb_desc_ep_t mock_msc_scsi_bulk_in_ep_desc = {
-    .bLength = sizeof(usb_desc_ep_t),
-    .bDescriptorType = USB_B_DESCRIPTOR_TYPE_ENDPOINT,
-    .bEndpointAddress = 0x82,       //EP 2 IN
-    .bmAttributes = USB_BM_ATTRIBUTES_XFER_BULK,
-    .wMaxPacketSize = 64,           //MPS of 64 bytes
-    .bInterval = 1,
-};
+//Constant descriptors
+extern const uint8_t mock_msc_scsi_dev_desc[];
+extern const uint8_t mock_msc_scsi_config_desc[];
+extern const uint8_t mock_msc_scsi_str_desc_manu[];
+extern const uint8_t mock_msc_scsi_str_desc_prod[];
+extern const uint8_t mock_msc_scsi_str_desc_ser_num[];
+extern const usb_ep_desc_t mock_msc_scsi_bulk_out_ep_desc;
+extern const usb_ep_desc_t mock_msc_scsi_bulk_in_ep_desc;
 
 #define MOCK_MSC_SCSI_DEV_ID_VENDOR     0x125F
 #define MOCK_MSC_SCSI_DEV_ID_PRODUCT    0xc08A
@@ -123,12 +108,12 @@ static const usb_desc_ep_t mock_msc_scsi_bulk_in_ep_desc = {
 #define MOCK_MSC_SCSI_BULK_IN_EP_ADDR   0x82
 #define MOCK_MSC_SCSI_BULK_EP_MPS       64
 
-#define MOCK_MSC_SCSI_REQ_INIT_RESET(ctrl_req_ptr, intf_num) ({  \
-    (ctrl_req_ptr)->bRequestType = USB_B_REQUEST_TYPE_DIR_OUT | USB_B_REQUEST_TYPE_TYPE_CLASS | USB_B_REQUEST_TYPE_RECIP_INTERFACE; \
-    (ctrl_req_ptr)->bRequest = 0xFF;    \
-    (ctrl_req_ptr)->wValue = 0; \
-    (ctrl_req_ptr)->wIndex = (intf_num);    \
-    (ctrl_req_ptr)->wLength = 0;    \
+#define MOCK_MSC_SCSI_REQ_INIT_RESET(setup_pkt_ptr, intf_num) ({  \
+    (setup_pkt_ptr)->bmRequestType = USB_BM_REQUEST_TYPE_DIR_OUT | USB_BM_REQUEST_TYPE_TYPE_CLASS | USB_BM_REQUEST_TYPE_RECIP_INTERFACE; \
+    (setup_pkt_ptr)->bRequest = 0xFF;    \
+    (setup_pkt_ptr)->wValue = 0; \
+    (setup_pkt_ptr)->wIndex = (intf_num);    \
+    (setup_pkt_ptr)->wLength = 0;    \
 })
 
 typedef struct __attribute__((packed)) {
@@ -193,27 +178,75 @@ Note: The mock HID mouse tests require that USB low speed mouse be connected. Th
 - Be implement the HID with standard report format used by mice
 - It's configuration 1 should have the following endpoint
 
-Endpoint Descriptor:
-    bLength             7
-    bDescriptorType     5
-    bEndpointAddress    0x81  EP 1 IN
-    bmAttributes        3
-        Transfer Type   Interrupt
-        Synch Type      None
-        Usage Type      Data
-    wMaxPacketSize      0x0004  1x 4 bytes
-    bInterval           10
+Device Descriptor:
+    bLength                18
+    bDescriptorType         1
+    bcdUSB               2.00
+    bDeviceClass            0
+    bDeviceSubClass         0
+    bDeviceProtocol         0
+    bMaxPacketSize0         8
+    idVendor           0x413c Dell Computer Corp.
+    idProduct          0x301a
+    bcdDevice            1.00
+    iManufacturer           1
+    iProduct                2
+    iSerial                 0
+    bNumConfigurations      1
+    Configuration Descriptor:
+        bLength                 9
+        bDescriptorType         2
+        wTotalLength       0x0022
+        bNumInterfaces          1
+        bConfigurationValue     1
+        iConfiguration          0
+        bmAttributes         0xa0
+        (Bus Powered)
+        Remote Wakeup
+        MaxPower              100mA
+        Interface Descriptor:
+            bLength                 9
+            bDescriptorType         4
+            bInterfaceNumber        0
+            bAlternateSetting       0
+            bNumEndpoints           1
+            bInterfaceClass         3 Human Interface Device
+            bInterfaceSubClass      1 Boot Interface Subclass
+            bInterfaceProtocol      2 Mouse
+            iInterface              0
+                HID Device Descriptor:
+                bLength                 9
+                bDescriptorType        33
+                bcdHID               1.11
+                bCountryCode            0 Not supported
+                bNumDescriptors         1
+                bDescriptorType        34 Report
+                wDescriptorLength      46
+                Report Descriptors:
+                ** UNAVAILABLE **
+            Endpoint Descriptor:
+                bLength                 7
+                bDescriptorType         5
+                bEndpointAddress     0x81  EP 1 IN
+                bmAttributes            3
+                Transfer Type            Interrupt
+                Synch Type               None
+                Usage Type               Data
+                wMaxPacketSize     0x0004  1x 4 bytes
+                bInterval              10
 
 If you're using another mice with different endpoints, modify the endpoint descriptor below
 */
-static const usb_desc_ep_t mock_hid_mouse_in_ep_desc = {
-    .bLength = sizeof(usb_desc_ep_t),
-    .bDescriptorType = USB_B_DESCRIPTOR_TYPE_ENDPOINT,
-    .bEndpointAddress = 0x81,       //EP 1 IN
-    .bmAttributes = USB_BM_ATTRIBUTES_XFER_INT,
-    .wMaxPacketSize = 4,            //MPS of 4 bytes
-    .bInterval = 10,                //Interval of 10ms
-};
+
+extern  const usb_ep_desc_t mock_hid_mouse_in_ep_desc;
+
+#define MOCK_HID_MOUSE_DEV_ID_VENDOR        0x413C
+#define MOCK_HID_MOUSE_DEV_ID_PRODUCT       0x301A
+#define MOCK_HID_MOUSE_DEV_DFLT_EP_MPS      8
+#define MOCK_HID_MOUSE_INTF_NUMBER          0
+#define MOCK_HID_MOUSE_INTF_ALT_SETTING     0
+#define MOCK_HID_MOUSE_INTR_IN_EP_ADDR      0x81
+#define MOCK_HID_MOUSE_INTR_IN_MPS          0x04
 
 typedef union {
     struct {
@@ -241,8 +274,8 @@ ISOC, transferring to a non-existent endpoint should work. The non-existent endp
 #define MOCK_ISOC_EP_MPS        512
 
 
-static const usb_desc_ep_t mock_isoc_out_ep_desc = {
-    .bLength = sizeof(usb_desc_ep_t),
+static const usb_ep_desc_t mock_isoc_out_ep_desc = {
+    .bLength = sizeof(usb_ep_desc_t),
     .bDescriptorType = USB_B_DESCRIPTOR_TYPE_ENDPOINT,
     .bEndpointAddress = MOCK_ISOC_EP_NUM,
     .bmAttributes = USB_BM_ATTRIBUTES_XFER_ISOC,

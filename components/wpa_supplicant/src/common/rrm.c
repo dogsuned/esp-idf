@@ -10,6 +10,7 @@
 
 #include "utils/common.h"
 #include "utils/bitfield.h"
+#include "utils/eloop.h"
 #include "common/ieee802_11_defs.h"
 #include "common/ieee802_11_common.h"
 #include "wpa_supplicant_i.h"
@@ -851,8 +852,15 @@ wpas_rm_handle_beacon_req(struct wpa_supplicant *wpa_s,
 		goto out;
 	}
 	params->channel = req->channel;
+#ifdef ESP_SUPPLICANT
+	if (params->channel == 0xff) {
+		/* set it to zero */
+		params->channel = 0;
+	}
+#endif
 	params->duration = le_to_host16(req->duration);
 	params->duration_mandatory = duration_mandatory;
+	params->mode = req->mode;
 	if (!params->duration) {
 		wpa_printf(MSG_DEBUG, "Beacon request: Duration is 0");
 		ret = -1;

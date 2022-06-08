@@ -1,16 +1,8 @@
-// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /******************************************************************************
  **
@@ -397,7 +389,7 @@ static UINT64 time_now_us(void)
 {
 #if _POSIX_TIMERS
     struct timespec ts_now;
-    clock_gettime(CLOCK_BOOTTIME, &ts_now);
+    clock_gettime(CLOCK_MONOTONIC, &ts_now);
     return ((UINT64)ts_now.tv_sec * 1000000L) + ((UINT64)ts_now.tv_nsec / 1000);
 #else
     struct timeval ts_now;
@@ -432,7 +424,6 @@ void btc_a2dp_source_set_tx_flush(BOOLEAN enable)
 ** Returns
 **
 *******************************************************************************/
-
 void btc_a2dp_source_setup_codec(void)
 {
     tBTC_AV_MEDIA_FEEDINGS media_feeding;
@@ -623,6 +614,30 @@ BOOLEAN btc_a2dp_source_tx_flush_req(void)
 #endif
 
     return TRUE;
+}
+
+/*****************************************************************************
+**
+** Function        btc_source_report_delay_value
+**
+** Description
+**
+** Returns
+**
+*******************************************************************************/
+void btc_source_report_delay_value(UINT16 delay_value)
+{
+    esp_a2d_cb_param_t param;
+
+#if A2D_DYNAMIC_MEMORY == TRUE
+    if (a2dp_source_local_param_ptr == NULL) {
+        return;
+    }
+#endif
+
+    param.a2d_report_delay_value_stat.delay_value = delay_value;
+
+    btc_aa_cb_to_app(ESP_A2D_REPORT_SNK_DELAY_VALUE_EVT, &param);
 }
 
 /*****************************************************************************
@@ -1579,7 +1594,6 @@ static void btc_a2dp_source_thread_init(UNUSED_ATTR void *context)
 
 static void btc_a2dp_source_thread_cleanup(UNUSED_ATTR void *context)
 {
-    btc_a2dp_control_set_datachnl_stat(FALSE);
     /* Clear media task flag */
     btc_a2dp_source_state = BTC_A2DP_SOURCE_STATE_OFF;
 

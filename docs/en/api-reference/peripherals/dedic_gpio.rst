@@ -4,7 +4,7 @@ Dedicated GPIO
 Overview
 --------
 
-The dedicated GPIO is designed for CPU interaction with GPIO matrix and IO MUX. Any GPIO that is configured as "dedicated" can be access by CPU instructions directly, which makes it easy to achieve a high GPIO flip speed, and simulate serial/parallel interface in a bit-banging way.
+The dedicated GPIO is designed for CPU interaction with GPIO matrix and IO MUX. Any GPIO that is configured as "dedicated" can be access by CPU instructions directly, which makes it easy to achieve a high GPIO flip speed, and simulate serial/parallel interface in a bit-banging way. As toggling a GPIO in this "CPU Dedicated" way costs few overhead, it would be great for cases like performance measurement using an oscilloscope.
 
 
 Create/Destroy GPIO Bundle
@@ -73,9 +73,48 @@ GPIO Bundle Operations
      - :cpp:func:`dedic_gpio_bundle_read_in`
 
 .. note::
-    The functions above just wrap the customized instructions defined for {IDF_TARGET_NAME}, for the details of those instructions, please refer to *{IDF_TARGET_NAME} Technical Reference Manual* > *IO MUX and GPIO Matrix (GPIO, IO_MUX)* [`PDF <{IDF_TARGET_TRM_EN_URL}#iomuxgpio>`__].
+    Using the above functions might not get a high GPIO flip speed because of the overhead of function calls and the bit operations involved inside. Users can try `Manipulate GPIOs by Assembly Code  <#manipulate-gpios-by-writing-assembly-code>`__ instead to reduce the overhead but should take care of the thread safety by themselves.
+
+Manipulate GPIOs by Writing Assembly Code
+------------------------------------------
+
+For advanced users, they can always manipulate the GPIOs by writing assembly code or invoking CPU Low Level APIs. The usual procedure could be:
+
+1. Allocate a GPIO bundle: :cpp:func:`dedic_gpio_new_bundle`
+2. Query the mask occupied by that bundle: :cpp:func:`dedic_gpio_get_out_mask` or/and :cpp:func:`dedic_gpio_get_in_mask`
+3. Call CPU LL apis (e.g. `cpu_ll_write_dedic_gpio_mask`) or write assembly code with that mask
+4. The fasted way of toggling IO is to use the dedicated "set/clear" instructions:
+
+    .. only:: esp32s2 or esp32s3
+
+        - Set bits of GPIO: ``set_bit_gpio_out imm[7:0]``
+        - Clear bits of GPIO: ``clr_bit_gpio_out imm[7:0]``
+        - Note: Immediate value width depends on the number of dedicated GPIO channels
+
+    .. only:: esp32c2 or esp32c3
+
+        - Set bits of GPIO: ``csrrsi rd, csr, imm[4:0]``
+        - Clear bits of GPIO: ``csrrci rd, csr, imm[4:0]``
+        - Note: Can only control the lowest 4 GPIO channels
 
 .. only:: esp32s2
+
+    For details of supported dedicated GPIO instructions, please refer to *{IDF_TARGET_NAME} Technical Reference Manual* > *IO MUX and GPIO Matrix (GPIO, IO_MUX)* [`PDF <{IDF_TARGET_TRM_EN_URL}#iomuxgpio>`__].
+
+.. only:: esp32s3
+
+    For details of supported dedicated GPIO instructions, please refer to *{IDF_TARGET_NAME} Technical Reference Manual* > *Processor Instruction Extensions (PIE) (to be added later)* [`PDF <{IDF_TARGET_TRM_EN_URL}#pie>`__].
+
+.. only:: esp32c2 or esp32c3
+
+    For details of supported dedicated GPIO instructions, please refer to *{IDF_TARGET_NAME} Technical Reference Manual* > *ESP-RISC-V CPU* [`PDF <{IDF_TARGET_TRM_EN_URL}#riscvcpu>`__].
+
+Some of the dedicated CPU instructions are also wrapped inside `soc/cpu_ll.h` as helper inline functions.
+
+.. note::
+    Writing assembly code in application could make your code hard to port between targets, because those customized instructions are not guaranteed to remain the same format on different targets.
+
+.. only:: SOC_DEDIC_GPIO_HAS_INTERRUPT
 
     Interrupt Handling
     ------------------
@@ -103,26 +142,12 @@ GPIO Bundle Operations
         // wait for done semaphore
         xSemaphoreTake(sem, portMAX_DELAY);
 
+.. only:: SOC_DEDIC_GPIO_HAS_INTERRUPT
 
-Manipulate GPIOs by Writing Assembly Code
-------------------------------------------
+    Application Example
+    -------------------
 
-For advanced users, they can always manipulate the GPIOs by writing assembly code or invoking CPU Low Level APIs. The usual procedure could be:
-
-1. Allocate a GPIO bundle: :cpp:func:`dedic_gpio_new_bundle`
-2. Query the mask occupied by that bundle: :cpp:func:`dedic_gpio_get_out_mask` or/and :cpp:func:`dedic_gpio_get_in_mask`
-3. Call CPU LL apis (e.g. `cpu_ll_write_dedic_gpio_mask`) or write assembly code with that mask
-
-For details of supported dedicated GPIO instructions, please refer to *{IDF_TARGET_NAME} Technical Reference Manual* > *IO MUX and GPIO Matrix (GPIO, IO_MUX)* [`PDF <{IDF_TARGET_TRM_EN_URL}#iomuxgpio>`__].
-
-.. note::
-    Writing assembly code in application could make your code hard to port between targets, because those customized instructions are not guaranteed to remain the same format in different targets.
-
-
-Application Example
--------------------
-
-Matrix keyboard example based on dedicated GPIO: :example:`peripherals/gpio/matrix_keyboard`.
+    Matrix keyboard example based on dedicated GPIO: :example:`peripherals/gpio/matrix_keyboard`.
 
 
 API Reference

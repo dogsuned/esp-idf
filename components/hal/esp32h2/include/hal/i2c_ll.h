@@ -1,22 +1,17 @@
-// Copyright 2020 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2020-2022 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 // The LL layer for I2C register operations
 
 #pragma once
+
+#include "hal/misc.h"
 #include "soc/i2c_periph.h"
 #include "soc/soc_caps.h"
+#include "soc/i2c_struct.h"
 #include "hal/i2c_types.h"
 #include "soc/rtc_cntl_reg.h"
 #include "esp_rom_sys.h"
@@ -92,7 +87,7 @@ typedef struct {
 // I2C slave RX interrupt bitmap
 #define I2C_LL_SLAVE_RX_INT           (I2C_RXFIFO_WM_INT_ENA_M | I2C_TRANS_COMPLETE_INT_ENA_M)
 // I2C source clock
-#define I2C_LL_CLK_SRC_FREQ(src_clk)  (((src_clk) == I2C_SCLK_RTC) ? 20*1000*1000 : 40*1000*1000); // Another clock is XTAL clock
+#define I2C_LL_CLK_SRC_FREQ(src_clk)  (((src_clk) == I2C_SCLK_RTC) ? 8*1000*1000 : 32*1000*1000); // Another clock is XTAL clock
 // delay time after rtc_clk swiching on
 #define DELAY_RTC_CLK_SWITCH          (5)
 // I2C max timeout value
@@ -154,19 +149,19 @@ static inline void i2c_ll_update(i2c_dev_t *hw)
  */
 static inline void i2c_ll_set_bus_timing(i2c_dev_t *hw, i2c_clk_cal_t *bus_cfg)
 {
-    hw->clk_conf.sclk_div_num = bus_cfg->clkm_div - 1;
+    HAL_FORCE_MODIFY_U32_REG_FIELD(hw->clk_conf, sclk_div_num, bus_cfg->clkm_div - 1);
     //scl period
-    hw->scl_low_period.period = bus_cfg->scl_low - 1;
-    hw->scl_high_period.period = bus_cfg->scl_high;
+    hw->scl_low_period.period = bus_cfg->scl_low - 2;
+    hw->scl_high_period.period = bus_cfg->scl_high - 3;
     //sda sample
-    hw->sda_hold.time = bus_cfg->sda_hold;
-    hw->sda_sample.time = bus_cfg->sda_sample;
+    hw->sda_hold.time = bus_cfg->sda_hold - 1;
+    hw->sda_sample.time = bus_cfg->sda_sample - 1;
     //setup
-    hw->scl_rstart_setup.time = bus_cfg->setup;
-    hw->scl_stop_setup.time = bus_cfg->setup;
+    hw->scl_rstart_setup.time = bus_cfg->setup - 1;
+    hw->scl_stop_setup.time = bus_cfg->setup - 1;
     //hold
     hw->scl_start_hold.time = bus_cfg->hold - 1;
-    hw->scl_stop_hold.time = bus_cfg->hold;
+    hw->scl_stop_hold.time = bus_cfg->hold - 1;
     hw->timeout.time_out_value = bus_cfg->tout;
     hw->timeout.time_out_en = 1;
 }
@@ -576,7 +571,7 @@ static inline void i2c_ll_get_scl_timing(i2c_dev_t *hw, int *high_period, int *l
 static inline void i2c_ll_write_txfifo(i2c_dev_t *hw, uint8_t *ptr, uint8_t len)
 {
     for (int i = 0; i< len; i++) {
-        hw->fifo_data.data = ptr[i];
+        HAL_FORCE_MODIFY_U32_REG_FIELD(hw->fifo_data, data, ptr[i]);
     }
 }
 
@@ -592,7 +587,7 @@ static inline void i2c_ll_write_txfifo(i2c_dev_t *hw, uint8_t *ptr, uint8_t len)
 static inline void i2c_ll_read_rxfifo(i2c_dev_t *hw, uint8_t *ptr, uint8_t len)
 {
     for(int i = 0; i < len; i++) {
-        ptr[i] = hw->fifo_data.data;
+        ptr[i] = HAL_FORCE_READ_U32_REG_FIELD(hw->fifo_data, data);
     }
 }
 

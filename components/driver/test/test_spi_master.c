@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -29,15 +29,16 @@
 #include "../cache_utils.h"
 #include "soc/soc_memory_layout.h"
 #include "driver/spi_common_internal.h"
+#include "esp_private/esp_clk.h"
+
 
 const static char TAG[] = "test_spi";
 
 // There is no input-only pin on esp32c3 and esp32s3
-#define TEST_SOC_HAS_INPUT_ONLY_PINS  (!DISABLED_FOR_TARGETS(ESP32C3, ESP32S3))
+#define TEST_SOC_HAS_INPUT_ONLY_PINS  (!DISABLED_FOR_TARGETS(ESP32C3, ESP32S3, ESP32C2))
 
 static void check_spi_pre_n_for(int clk, int pre, int n)
 {
-    esp_err_t ret;
     spi_device_handle_t handle;
 
     spi_device_interface_config_t devcfg = {
@@ -54,12 +55,11 @@ static void check_spi_pre_n_for(int clk, int pre, int n)
     spi_transaction_t t;
     memset(&t, 0, sizeof(t));
 
-    ret = spi_bus_add_device(TEST_SPI_HOST, &devcfg, &handle);
-    TEST_ASSERT(ret == ESP_OK);
+    TEST_ESP_OK(spi_bus_add_device(TEST_SPI_HOST, &devcfg, &handle));
 
     t.length = 16 * 8;
     t.tx_buffer = sendbuf;
-    ret = spi_device_transmit(handle, &t);
+    TEST_ESP_OK(spi_device_transmit(handle, &t));
 
     spi_dev_t *hw = spi_periph_signal[TEST_SPI_HOST].hw;
 
@@ -68,9 +68,19 @@ static void check_spi_pre_n_for(int clk, int pre, int n)
     TEST_ASSERT(hw->clock.clkcnt_n + 1 == n);
     TEST_ASSERT(hw->clock.clkdiv_pre + 1 == pre);
 
-    ret = spi_bus_remove_device(handle);
-    TEST_ASSERT(ret == ESP_OK);
+    TEST_ESP_OK(spi_bus_remove_device(handle));
 }
+
+#define TEST_CLK_TIMES              8
+/**
+ * In this test, SPI Clock Calculation:
+ *   Fspi = Fclk_spi_mst / (pre + n)
+ *
+ * For each item:
+ * {freq, pre, n}
+ */
+#define TEST_CLK_PARAM_APB_80       {{1, SOC_SPI_MAX_PRE_DIVIDER, 64}, {100000, 16, 50}, {333333, 4, 60}, {800000, 2, 50}, {900000, 2, 44}, {8000000, 1, 10}, {20000000, 1, 4}, {26000000, 1, 3} }
+#define TEST_CLK_PARAM_APB_40       {{1, SOC_SPI_MAX_PRE_DIVIDER, 64}, {100000, 8, 50}, {333333, 2, 60}, {800000, 1, 50}, {900000, 1, 44}, {8000000, 1, 5}, {10000000, 1, 4}, {20000000, 1, 2} }
 
 TEST_CASE("SPI Master clockdiv calculation routines", "[spi]")
 {
@@ -81,22 +91,23 @@ TEST_CASE("SPI Master clockdiv calculation routines", "[spi]")
         .quadwp_io_num = -1,
         .quadhd_io_num = -1
     };
-    esp_err_t ret;
-    ret = spi_bus_initialize(TEST_SPI_HOST, &buscfg, SPI_DMA_CH_AUTO);
-    TEST_ASSERT(ret == ESP_OK);
+    TEST_ESP_OK(spi_bus_initialize(TEST_SPI_HOST, &buscfg, SPI_DMA_CH_AUTO));
 
-    check_spi_pre_n_for(26000000, 1, 3);
-    check_spi_pre_n_for(20000000, 1, 4);
-    check_spi_pre_n_for(8000000, 1, 10);
-    check_spi_pre_n_for(800000, 2, 50);
-    check_spi_pre_n_for(100000, 16, 50);
-    check_spi_pre_n_for(333333, 4, 60);
-    check_spi_pre_n_for(900000, 2, 44);
-    check_spi_pre_n_for(1, SOC_SPI_MAX_PRE_DIVIDER, 64); //Actually should generate the minimum clock speed, 152Hz
-    check_spi_pre_n_for(26000000, 1, 3);
+    uint32_t apb_freq_hz = esp_clk_apb_freq();
+    if (apb_freq_hz == (80 * 1000 * 1000)) {
+        uint32_t clk_param[TEST_CLK_TIMES][3] = TEST_CLK_PARAM_APB_80;
+        for (int i = 0; i < TEST_CLK_TIMES; i++) {
+            check_spi_pre_n_for(clk_param[i][0], clk_param[i][1], clk_param[i][2]);
+        }
+    } else {
+        TEST_ASSERT(apb_freq_hz == (40 * 1000 * 1000));
+        uint32_t clk_param[TEST_CLK_TIMES][3] = TEST_CLK_PARAM_APB_40;
+        for (int i = 0; i < TEST_CLK_TIMES; i++) {
+            check_spi_pre_n_for(clk_param[i][0], clk_param[i][1], clk_param[i][2]);
+        }
+    }
 
-    ret = spi_bus_free(TEST_SPI_HOST);
-    TEST_ASSERT(ret == ESP_OK);
+    TEST_ESP_OK(spi_bus_free(TEST_SPI_HOST));
 }
 
 static spi_device_handle_t setup_spi_bus_loopback(int clkspeed, bool dma)
@@ -282,7 +293,7 @@ TEST_CASE("SPI Master test, interaction of multiple devs", "[spi]")
     TEST_ASSERT(success);
 }
 
-#if TEST_SOC_HAS_INPUT_ONLY_PINS  //There is no input-only pin on esp32c3 and esp32s3, so this test could be ignored.
+#if TEST_SOC_HAS_INPUT_ONLY_PINS  //There is no input-only pin, so this test could be ignored.
 static esp_err_t test_master_pins(int mosi, int miso, int sclk, int cs)
 {
     esp_err_t ret;
@@ -780,7 +791,9 @@ TEST_CASE("SPI Master DMA test: length, start, not aligned", "[spi]")
 }
 
 
-#if !DISABLED_FOR_TARGETS(ESP32C3)  //There is only one GPSPI controller, so single-board test is disabled.
+#if (TEST_SPI_PERIPH_NUM >= 2)
+//These will only be enabled on chips with 2 or more SPI peripherals
+
 static uint8_t bitswap(uint8_t in)
 {
     uint8_t out = 0;
@@ -1040,7 +1053,7 @@ TEST_CASE("SPI master hd dma TX without RX test", "[spi]")
     spi_device_handle_t spi;
     spi_device_interface_config_t dev_cfg = SPI_DEVICE_TEST_DEFAULT_CONFIG();
     dev_cfg.flags = SPI_DEVICE_HALFDUPLEX;
-    dev_cfg.clock_speed_hz = 4 * 1000 * 1000;
+    dev_cfg.clock_speed_hz = 1 * 1000 * 1000;
     TEST_ESP_OK(spi_bus_add_device(TEST_SPI_HOST, &dev_cfg, &spi));
 
     spi_slave_interface_config_t slave_cfg = SPI_SLAVE_TEST_DEFAULT_CONFIG();
@@ -1108,11 +1121,186 @@ TEST_CASE("SPI master hd dma TX without RX test", "[spi]")
     spi_slave_free(TEST_SLAVE_HOST);
     master_free_device_bus(spi);
 }
+#endif  //#if (TEST_SPI_PERIPH_NUM >= 2)
 
-//There is only one GPSPI controller, so single-board test is disabled.
-#endif  //#if !DISABLED_FOR_TARGETS(ESP32C3)
+#if !TEMPORARY_DISABLED_FOR_TARGETS(ESP32)    //TODO: IDF-3494
+#define FD_TEST_BUF_SIZE    32
+#define TEST_NUM            4
+#define FD_SEED1            199
+#define FD_SEED2            29
+#define FD_SEED3            48
+#define FD_SEED4            327
 
+static void master_only_tx_trans(spi_device_handle_t spi, uint8_t *mst_send_buf, uint32_t length)
+{
+    ESP_LOGI(MASTER_TAG, "FD DMA, Only TX:");
+    spi_transaction_t trans = {0};
+    trans.tx_buffer = mst_send_buf;
+    trans.length = length * 8;
+    unity_wait_for_signal("Slave ready");
+    TEST_ESP_OK(spi_device_transmit(spi, &trans));
+    ESP_LOG_BUFFER_HEX("MASTER TX:", mst_send_buf, length);
+}
 
+static void master_only_rx_trans(spi_device_handle_t spi, uint8_t *mst_recv_buf, uint8_t *slv_send_buf, uint32_t length)
+{
+    ESP_LOGI(MASTER_TAG, "FD DMA, Only RX:");
+    spi_transaction_t trans = {0};
+    trans.tx_buffer = NULL;
+    trans.rx_buffer = mst_recv_buf;
+    trans.length = length * 8;
+    unity_wait_for_signal("Slave ready");
+    TEST_ESP_OK(spi_device_transmit(spi, &trans));
+    ESP_LOG_BUFFER_HEX("MASTER RX:", mst_recv_buf, length);
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(slv_send_buf, mst_recv_buf, length);
+}
+
+static void master_both_trans(spi_device_handle_t spi, uint8_t *mst_send_buf, uint8_t *mst_recv_buf, uint8_t *slv_send_buf, uint32_t length)
+{
+    ESP_LOGI(MASTER_TAG, "FD DMA, Both TX and RX:");
+    spi_transaction_t trans = {0};
+    trans.tx_buffer = mst_send_buf;
+    trans.rx_buffer = mst_recv_buf;
+    trans.length = length * 8;
+    unity_wait_for_signal("Slave ready");
+    TEST_ESP_OK(spi_device_transmit(spi, &trans));
+    ESP_LOG_BUFFER_HEX("MASTER TX:", mst_send_buf, length);
+    ESP_LOG_BUFFER_HEX("MASTER RX:", mst_recv_buf, length);
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(slv_send_buf, mst_recv_buf, length);
+}
+
+static void fd_master(void)
+{
+    spi_bus_config_t bus_cfg = SPI_BUS_TEST_DEFAULT_CONFIG();
+    TEST_ESP_OK(spi_bus_initialize(TEST_SPI_HOST, &bus_cfg, SPI_DMA_CH_AUTO));
+
+    spi_device_handle_t spi;
+    spi_device_interface_config_t dev_cfg = SPI_DEVICE_TEST_DEFAULT_CONFIG();
+    TEST_ESP_OK(spi_bus_add_device(TEST_SPI_HOST, &dev_cfg, &spi));
+
+    unity_send_signal("Master ready");
+
+    uint8_t *mst_send_buf = heap_caps_malloc(FD_TEST_BUF_SIZE, MALLOC_CAP_DMA);
+    uint8_t *mst_recv_buf = heap_caps_calloc(FD_TEST_BUF_SIZE, 1, MALLOC_CAP_DMA);
+    uint8_t *slv_send_buf = heap_caps_malloc(FD_TEST_BUF_SIZE, MALLOC_CAP_DMA);
+
+    //Master FD DMA, RX without TX Test
+    for (int i = 0; i < TEST_NUM; i++) {
+        // 1. Master FD DMA, only receive, with NULL tx_buffer
+        get_tx_buffer(FD_SEED1+i, mst_send_buf, slv_send_buf, FD_TEST_BUF_SIZE);
+        memset(mst_recv_buf, 0x0, FD_TEST_BUF_SIZE);
+        master_only_rx_trans(spi, mst_recv_buf, slv_send_buf, FD_TEST_BUF_SIZE);
+
+        //2. Master FD DMA with TX and RX
+        get_tx_buffer(FD_SEED2+i, mst_send_buf, slv_send_buf, FD_TEST_BUF_SIZE);
+        memset(mst_recv_buf, 0x0, FD_TEST_BUF_SIZE);
+        master_both_trans(spi, mst_send_buf, mst_recv_buf, slv_send_buf, FD_TEST_BUF_SIZE);
+    }
+
+    //Master FD DMA, TX without RX Test
+    for (int i = 0; i < TEST_NUM; i++) {
+        // 1. Master FD DMA, only send, with NULL rx_buffer
+        get_tx_buffer(FD_SEED3+i, mst_send_buf, slv_send_buf, FD_TEST_BUF_SIZE);
+        master_only_tx_trans(spi, mst_send_buf, FD_TEST_BUF_SIZE);
+
+        //2. Master FD DMA with TX and RX
+        get_tx_buffer(FD_SEED4+i, mst_send_buf, slv_send_buf, FD_TEST_BUF_SIZE);
+        memset(mst_recv_buf, 0x0, FD_TEST_BUF_SIZE);
+        master_both_trans(spi, mst_send_buf, mst_recv_buf, slv_send_buf, FD_TEST_BUF_SIZE);
+    }
+
+    free(mst_send_buf);
+    free(mst_recv_buf);
+    free(slv_send_buf);
+    master_free_device_bus(spi);
+}
+
+static void slave_only_tx_trans(uint8_t *slv_send_buf, uint32_t length)
+{
+    ESP_LOGI(SLAVE_TAG, "FD DMA, Only TX");
+    spi_slave_transaction_t trans = {0};
+    trans.tx_buffer = slv_send_buf;
+    trans.length = length * 8;
+    unity_send_signal("Slave ready");
+    TEST_ESP_OK(spi_slave_transmit(SPI2_HOST, &trans, portMAX_DELAY));
+    ESP_LOG_BUFFER_HEX("SLAVE TX:", slv_send_buf, length);
+}
+
+static void slave_only_rx_trans(uint8_t *slv_recv_buf, uint8_t *mst_send_buf, uint32_t length)
+{
+    ESP_LOGI(SLAVE_TAG, "FD DMA, Only RX");
+    spi_slave_transaction_t trans = {};
+    trans.tx_buffer = NULL;
+    trans.rx_buffer = slv_recv_buf;
+    trans.length = length * 8;
+    unity_send_signal("Slave ready");
+    TEST_ESP_OK(spi_slave_transmit(SPI2_HOST, &trans, portMAX_DELAY));
+    ESP_LOG_BUFFER_HEX("SLAVE RX:", slv_recv_buf, length);
+    TEST_ASSERT_EQUAL(length * 8, trans.trans_len);
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(mst_send_buf, slv_recv_buf, length);
+}
+
+static void slave_both_trans(uint8_t *slv_send_buf, uint8_t *slv_recv_buf, uint8_t *mst_send_buf, uint32_t length)
+{
+    ESP_LOGI(SLAVE_TAG, "FD DMA, Both TX and RX:");
+    spi_slave_transaction_t trans = {0};
+    trans.tx_buffer = slv_send_buf;
+    trans.rx_buffer = slv_recv_buf;
+    trans.length = length * 8;
+    unity_send_signal("Slave ready");
+    TEST_ESP_OK(spi_slave_transmit(SPI2_HOST, &trans, portMAX_DELAY));
+    ESP_LOG_BUFFER_HEX("SLAVE TX:", slv_send_buf, length);
+    ESP_LOG_BUFFER_HEX("SLAVE RX:", slv_recv_buf, length);
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(mst_send_buf, slv_recv_buf, length);
+}
+
+static void fd_slave(void)
+{
+    spi_bus_config_t buscfg = SPI_BUS_TEST_DEFAULT_CONFIG();
+    spi_slave_interface_config_t slvcfg = SPI_SLAVE_TEST_DEFAULT_CONFIG();
+
+    TEST_ESP_OK(spi_slave_initialize(SPI2_HOST, &buscfg, &slvcfg, SPI_DMA_CH_AUTO));
+
+    unity_wait_for_signal("Master ready");
+
+    uint8_t *slv_send_buf = heap_caps_malloc(FD_TEST_BUF_SIZE, MALLOC_CAP_DMA);
+    uint8_t *slv_recv_buf = heap_caps_calloc(FD_TEST_BUF_SIZE, 1, MALLOC_CAP_DMA);
+    uint8_t *mst_send_buf = heap_caps_malloc(FD_TEST_BUF_SIZE, MALLOC_CAP_DMA);
+
+    for (int i = 0; i < TEST_NUM; i++) {
+        //1. Slave TX without RX (rx_buffer == NULL)
+        get_tx_buffer(FD_SEED1+i, mst_send_buf, slv_send_buf, FD_TEST_BUF_SIZE);
+        slave_only_tx_trans(slv_send_buf, FD_TEST_BUF_SIZE);
+
+        //2. Slave both TX and RX
+        get_tx_buffer(FD_SEED2+i, mst_send_buf, slv_send_buf, FD_TEST_BUF_SIZE);
+        memset(slv_recv_buf, 0x0, FD_TEST_BUF_SIZE);
+        slave_both_trans(slv_send_buf, slv_recv_buf, mst_send_buf, FD_TEST_BUF_SIZE);
+    }
+
+    for (int i = 0; i < TEST_NUM; i++) {
+        // 1. Slave RX without TX (tx_buffer == NULL)
+        get_tx_buffer(FD_SEED3+i, mst_send_buf, slv_send_buf, FD_TEST_BUF_SIZE);
+        memset(slv_recv_buf, 0x0, FD_TEST_BUF_SIZE);
+        slave_only_rx_trans(slv_recv_buf, mst_send_buf, FD_TEST_BUF_SIZE);
+
+        //2. Slave both TX and RX
+        get_tx_buffer(FD_SEED4+i, mst_send_buf, slv_send_buf, FD_TEST_BUF_SIZE);
+        memset(slv_recv_buf, 0x0, FD_TEST_BUF_SIZE);
+        slave_both_trans(slv_send_buf, slv_recv_buf, mst_send_buf, FD_TEST_BUF_SIZE);
+    }
+
+    free(slv_send_buf);
+    free(slv_recv_buf);
+    free(mst_send_buf);
+    TEST_ASSERT(spi_slave_free(SPI2_HOST) == ESP_OK);
+}
+
+TEST_CASE_MULTIPLE_DEVICES("SPI Master: FD, DMA, Master Single Direction Test", "[spi_ms][test_env=Example_SPI_Multi_device]", fd_master, fd_slave);
+#endif  //#if !TEMPORARY_DISABLED_FOR_TARGETS(ESP32)    //TODO: IDF-3494
+
+//NOTE: Explained in IDF-1445 | MR !14996
+#if !(CONFIG_SPIRAM) || (CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL >= 16384)
 /********************************************************************************
  *      Test SPI transaction interval
  ********************************************************************************/
@@ -1122,15 +1310,7 @@ TEST_CASE("SPI master hd dma TX without RX test", "[spi]")
 #define RECORD_TIME_PREPARE() uint32_t __t1, __t2
 #define RECORD_TIME_START()   do {__t1 = esp_cpu_get_ccount();}while(0)
 #define RECORD_TIME_END(p_time) do{__t2 = esp_cpu_get_ccount(); *p_time = (__t2-__t1);}while(0)
-#ifdef CONFIG_IDF_TARGET_ESP32
-#define GET_US_BY_CCOUNT(t) ((double)t/CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ)
-#elif CONFIG_IDF_TARGET_ESP32S2
-#define GET_US_BY_CCOUNT(t) ((double)t/CONFIG_ESP32S2_DEFAULT_CPU_FREQ_MHZ)
-#elif CONFIG_IDF_TARGET_ESP32S3
-#define GET_US_BY_CCOUNT(t) ((double)t/CONFIG_ESP32S3_DEFAULT_CPU_FREQ_MHZ)
-#elif CONFIG_IDF_TARGET_ESP32C3
-#define GET_US_BY_CCOUNT(t) ((double)t/CONFIG_ESP32C3_DEFAULT_CPU_FREQ_MHZ)
-#endif
+#define GET_US_BY_CCOUNT(t) ((double)t/CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ)
 
 static void speed_setup(spi_device_handle_t *spi, bool use_dma)
 {
@@ -1267,3 +1447,4 @@ TEST_CASE("spi_speed", "[spi]")
     master_free_device_bus(spi);
 }
 #endif // CONFIG_FREERTOS_CHECK_PORT_CRITICAL_COMPLIANCE
+#endif // !(CONFIG_SPIRAM) || (CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL >= 16384)

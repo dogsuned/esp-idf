@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2019-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2019-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -10,6 +10,7 @@
 #include "test_utils.h"
 #include "param_test.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "driver/spi_common.h"
 #include "soc/soc_caps.h"
 #include "ccomp_timer.h"
@@ -17,6 +18,7 @@
 #if !TEMPORARY_DISABLED_FOR_TARGETS(ESP32S3)
 
 #if SOC_SDMMC_HOST_SUPPORTED && SOC_SDIO_SLAVE_SUPPORTED
+#include "soc/sdio_slave_pins.h"
 #include "driver/sdio_slave.h"
 #include "driver/sdmmc_host.h"
 

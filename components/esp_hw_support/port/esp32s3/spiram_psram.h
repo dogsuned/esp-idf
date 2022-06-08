@@ -1,40 +1,30 @@
-// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#pragma once
 
-
-#ifndef _PSRAM_H
-#define _PSRAM_H
 #include "soc/spi_mem_reg.h"
 #include "esp_err.h"
 #include "sdkconfig.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define PSRAM_SIZE_2MB                  (2 * 1024 * 1024)
+#define PSRAM_SIZE_4MB                  (4 * 1024 * 1024)
+#define PSRAM_SIZE_8MB                  (8 * 1024 * 1024)
+#define PSRAM_SIZE_16MB                 (16 * 1024 * 1024)
+#define PSRAM_SIZE_32MB                 (32 * 1024 * 1024)
+
 typedef enum {
     PSRAM_CACHE_S80M = 1,
     PSRAM_CACHE_S40M,
-    PSRAM_CACHE_S26M,
-    PSRAM_CACHE_S20M,
     PSRAM_CACHE_MAX,
 } psram_cache_mode_t;
 
-typedef enum {
-    PSRAM_SIZE_16MBITS  = 0,
-    PSRAM_SIZE_32MBITS  = 1,
-    PSRAM_SIZE_64MBITS  = 2,
-    PSRAM_SIZE_128MBITS = 3,
-    PSRAM_SIZE_256MBITS = 4,
-    PSRAM_SIZE_MAX,
-} psram_size_t;
 
 /*
 See the TRM, chapter PID/MPU/MMU, header 'External RAM' for the definitions of these modes.
@@ -50,12 +40,22 @@ typedef enum {
 } psram_vaddr_mode_t;
 
 /**
- * @brief get psram size
- * @return
- *     - PSRAM_SIZE_MAX if psram not enabled or not valid
- *     - PSRAM size
+ * @brief To get the physical psram size in bytes.
+ *
+ * @param[out] out_size_bytes    physical psram size in bytes.
  */
-psram_size_t psram_get_size(void);
+esp_err_t psram_get_physical_size(uint32_t *out_size_bytes);
+
+/**
+ * @brief To get the available physical psram size in bytes.
+ *
+ * If ECC is enabled, available PSRAM size will be 15/16 times its physical size.
+ * If not, it equals to the physical psram size.
+ * @note For now ECC is only enabled on ESP32S3 Octal PSRAM
+ *
+ * @param[out] out_size_bytes    availabe physical psram size in bytes.
+ */
+esp_err_t psram_get_available_size(uint32_t *out_size_bytes);
 
 /**
  * @brief psram cache enable function
@@ -78,5 +78,13 @@ typedef enum {
 
 esp_err_t esp_spiram_wrap_set(spiram_wrap_mode_t mode);
 
+/**
+ * @brief get psram CS IO
+ *
+ * @return psram CS IO
+ */
+uint8_t psram_get_cs_io(void);
 
+#ifdef __cplusplus
+}
 #endif

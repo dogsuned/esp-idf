@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2020-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2020-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -13,30 +13,33 @@
 #include "esp_rom_efuse.h"
 #include "esp_rom_uart.h"
 #include "esp_rom_sys.h"
+#include "esp_rom_spiflash.h"
 #include "soc/efuse_reg.h"
 #include "soc/gpio_sig_map.h"
 #include "soc/io_mux_reg.h"
 #include "soc/assist_debug_reg.h"
-#include "soc/cpu.h"
+#include "esp_cpu.h"
 #include "soc/rtc.h"
 #include "soc/spi_periph.h"
 #include "soc/extmem_reg.h"
 #include "soc/io_mux_reg.h"
 #include "soc/system_reg.h"
 #include "esp32c3/rom/efuse.h"
-#include "esp32c3/rom/spi_flash.h"
-#include "esp32c3/rom/cache.h"
 #include "esp32c3/rom/ets_sys.h"
-#include "esp32c3/rom/spi_flash.h"
 #include "bootloader_common.h"
 #include "bootloader_init.h"
 #include "bootloader_clock.h"
 #include "bootloader_flash_config.h"
 #include "bootloader_mem.h"
-#include "regi2c_ctrl.h"
+#include "esp_private/regi2c_ctrl.h"
+#include "regi2c_lp_bias.h"
+#include "regi2c_bias.h"
 #include "bootloader_console.h"
 #include "bootloader_flash_priv.h"
+#include "bootloader_soc.h"
 #include "esp_efuse.h"
+#include "hal/mmu_hal.h"
+#include "hal/cache_hal.h"
 
 static const char *TAG = "boot.esp32c3";
 
@@ -72,16 +75,6 @@ void IRAM_ATTR bootloader_configure_spi_pins(int drv)
     }
 }
 
-static void bootloader_reset_mmu(void)
-{
-    Cache_Suspend_ICache();
-    Cache_Invalidate_ICache_All();
-    Cache_MMU_Init();
-
-    REG_CLR_BIT(EXTMEM_ICACHE_CTRL1_REG, EXTMEM_ICACHE_SHUT_IBUS);
-    REG_CLR_BIT(EXTMEM_ICACHE_CTRL1_REG, EXTMEM_ICACHE_SHUT_DBUS);
-}
-
 static void update_flash_config(const esp_image_header_t *bootloader_hdr)
 {
     uint32_t size;
@@ -104,10 +97,10 @@ static void update_flash_config(const esp_image_header_t *bootloader_hdr)
     default:
         size = 2;
     }
-    uint32_t autoload = Cache_Suspend_ICache();
+    cache_hal_disable(CACHE_TYPE_ALL);
     // Set flash chip size
     esp_rom_spiflash_config_param(rom_spiflash_legacy_data->chip.device_id, size * 0x100000, 0x10000, 0x1000, 0x100, 0xffff);    // TODO: set mode
-    Cache_Resume_ICache(autoload);
+    cache_hal_enable(CACHE_TYPE_ALL);
 }
 
 static void print_flash_info(const esp_image_header_t *bootloader_hdr)
@@ -120,16 +113,16 @@ static void print_flash_info(const esp_image_header_t *bootloader_hdr)
 
     const char *str;
     switch (bootloader_hdr->spi_speed) {
-    case ESP_IMAGE_SPI_SPEED_40M:
+    case ESP_IMAGE_SPI_SPEED_DIV_2:
         str = "40MHz";
         break;
-    case ESP_IMAGE_SPI_SPEED_26M:
+    case ESP_IMAGE_SPI_SPEED_DIV_3:
         str = "26.7MHz";
         break;
-    case ESP_IMAGE_SPI_SPEED_20M:
+    case ESP_IMAGE_SPI_SPEED_DIV_4:
         str = "20MHz";
         break;
-    case ESP_IMAGE_SPI_SPEED_80M:
+    case ESP_IMAGE_SPI_SPEED_DIV_1:
         str = "80MHz";
         break;
     default:
@@ -203,7 +196,7 @@ static esp_err_t bootloader_init_spi_flash(void)
 #endif
 
     bootloader_spi_flash_resume();
-    esp_rom_spiflash_unlock();
+    bootloader_flash_unlock();
 
 #if CONFIG_ESPTOOLPY_FLASHMODE_QIO || CONFIG_ESPTOOLPY_FLASHMODE_QOUT
     bootloader_enable_qio_mode();
@@ -263,7 +256,7 @@ static inline void bootloader_hardware_init(void)
     }
 }
 
-static inline void bootloader_glitch_reset_disable(void)
+static inline void bootloader_ana_reset_config(void)
 {
     /*
       For origin chip & ECO1: only support swt reset;
@@ -271,10 +264,27 @@ static inline void bootloader_glitch_reset_disable(void)
       For ECO3: fix clock glitch reset bug, support all reset, include: swt & brownout & clock glitch reset.
     */
     uint8_t chip_version = bootloader_common_get_chip_revision();
-    if (chip_version < 2) {
-        REG_SET_FIELD(RTC_CNTL_FIB_SEL_REG, RTC_CNTL_FIB_SEL, RTC_CNTL_FIB_SUPER_WDT_RST);
-    } else if (chip_version == 2) {
-        REG_SET_FIELD(RTC_CNTL_FIB_SEL_REG, RTC_CNTL_FIB_SEL, RTC_CNTL_FIB_SUPER_WDT_RST | RTC_CNTL_FIB_BOR_RST);
+    switch (chip_version) {
+        case 0:
+        case 1:
+            //Enable WDT reset. Disable BOR and GLITCH reset
+            bootloader_ana_super_wdt_reset_config(true);
+            bootloader_ana_bod_reset_config(false);
+            bootloader_ana_clock_glitch_reset_config(false);
+            break;
+        case 2:
+            //Enable WDT and BOR reset. Disable GLITCH reset
+            bootloader_ana_super_wdt_reset_config(true);
+            bootloader_ana_bod_reset_config(true);
+            bootloader_ana_clock_glitch_reset_config(false);
+            break;
+        case 3:
+        default:
+            //Enable WDT, BOR, and GLITCH reset
+            bootloader_ana_super_wdt_reset_config(true);
+            bootloader_ana_bod_reset_config(true);
+            bootloader_ana_clock_glitch_reset_config(true);
+            break;
     }
 }
 
@@ -283,7 +293,7 @@ esp_err_t bootloader_init(void)
     esp_err_t ret = ESP_OK;
 
     bootloader_hardware_init();
-    bootloader_glitch_reset_disable();
+    bootloader_ana_reset_config();
     bootloader_super_wdt_auto_feed();
     // protect memory region
     bootloader_init_mem();
@@ -299,8 +309,10 @@ esp_err_t bootloader_init(void)
     esp_efuse_init_virtual_mode_in_ram();
 #endif
 #endif
-    // reset MMU
-    bootloader_reset_mmu();
+    //init cache hal
+    cache_hal_init();
+    //reset mmu
+    mmu_hal_init();
     // config clock
     bootloader_clock_configure();
     // initialize console, from now on, we can use esp_log
@@ -309,6 +321,11 @@ esp_err_t bootloader_init(void)
     bootloader_print_banner();
     // update flash ID
     bootloader_flash_update_id();
+    // Check and run XMC startup flow
+    if ((ret = bootloader_flash_xmc_startup()) != ESP_OK) {
+        ESP_LOGE(TAG, "failed when running XMC startup flow, reboot!");
+        goto err;
+    }
     // read bootloader header
     if ((ret = bootloader_read_bootloader_header()) != ESP_OK) {
         goto err;

@@ -266,7 +266,7 @@ void btm_dev_timeout (TIMER_LIST_ENT  *p_tle)
 ** Returns          void
 **
 *******************************************************************************/
-static void btm_decode_ext_features_page (UINT8 page_number, const UINT8 *p_features)
+static void btm_decode_ext_features_page (UINT8 page_number, const BD_FEATURES p_features)
 {
     BTM_TRACE_DEBUG ("btm_decode_ext_features_page page: %d", page_number);
     switch (page_number) {
@@ -940,7 +940,7 @@ tBTM_STATUS BTM_EnableTestMode(void)
 *******************************************************************************/
 tBTM_STATUS BTM_DeleteStoredLinkKey(BD_ADDR bd_addr, tBTM_CMPL_CB *p_cb)
 {
-    BD_ADDR local_bd_addr;
+    BD_ADDR local_bd_addr = {0};
     BOOLEAN delete_all_flag = FALSE;
 
     /* Check if the previous command is completed */

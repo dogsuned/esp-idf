@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -10,20 +10,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include "sdkconfig.h"
-#if !defined(CONFIG_IDF_TARGET_LINUX)
 #include "esp_rom_sys.h"
-#endif // !CONFIG_IDF_TARGET_LINUX
-#if CONFIG_IDF_TARGET_ESP32
-#include "esp32/rom/ets_sys.h" // will be removed in idf v5.0
-#elif CONFIG_IDF_TARGET_ESP32S2
-#include "esp32s2/rom/ets_sys.h"
-#elif CONFIG_IDF_TARGET_ESP32S3
-#include "esp32s3/rom/ets_sys.h"
-#elif CONFIG_IDF_TARGET_ESP32C3
-#include "esp32c3/rom/ets_sys.h"
-#elif CONFIG_IDF_TARGET_ESP32H2
-#include "esp32h2/rom/ets_sys.h"
-#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -58,9 +45,8 @@ extern esp_log_level_t esp_log_default_level;
  *
  * If logging for given component has already been enabled, changes previous setting.
  *
- * Note that this function can not raise log level above the level set using
+ * @note Note that this function can not raise log level above the level set using
  * CONFIG_LOG_MAXIMUM_LEVEL setting in menuconfig.
- *
  * To raise log level above the default one for a given file, define
  * LOG_LOCAL_LEVEL to one of the ESP_LOG_* values, before including
  * esp_log.h in this file.
@@ -74,7 +60,7 @@ extern esp_log_level_t esp_log_default_level;
 void esp_log_level_set(const char* tag, esp_log_level_t level);
 
 /**
- * @brief Get log level for given tag, can be used to avoid expensive log statements
+ * @brief Get log level for a given tag, can be used to avoid expensive log statements
  *
  * @param tag Tag of the log to query current level. Must be a non-NULL zero terminated
  *            string.
@@ -89,6 +75,9 @@ esp_log_level_t esp_log_level_get(const char* tag);
  * By default, log output goes to UART0. This function can be used to redirect log
  * output to some other destination, such as file or network. Returns the original
  * log handler, which may be necessary to return output to the previous destination.
+ *
+ * @note Please note that function callback here must be re-entrant as it can be
+ * invoked in parallel from multiple thread context.
  *
  * @param func new Function used for output. Must have same signature as vprintf.
  *
@@ -118,8 +107,8 @@ uint32_t esp_log_timestamp(void);
  * 0 on startup, this can be set to the correct time with an SNTP sync,
  * or manually with standard POSIX time functions.
  *
- * Currently this will not get used in logging from binary blobs
- * (i.e WiFi & Bluetooth libraries), these will still print the RTOS tick time.
+ * Currently, this will not get used in logging from binary blobs
+ * (i.e. Wi-Fi & Bluetooth libraries), these will still print the RTOS tick time.
  *
  * @return timestamp, in "HH:MM:SS.sss"
  */
@@ -209,7 +198,7 @@ void esp_log_writev(esp_log_level_t level, const char* tag, const char* format, 
  *      W (195) log_example: 0x3ffb4290   77 6f 72 6b 69 6e 67 20  61 6c 6f 6e 67 20 77 69  |working along wi|
  *      W (205) log_example: 0x3ffb42a0   74 68 20 74 68 65 20 49  44 46 2e 00              |th the IDF..|
  *
- * It is highly recommend to use terminals with over 102 text width.
+ * It is highly recommended to use terminals with over 102 text width.
  *
  * @param tag description tag
  * @param buffer Pointer to the buffer array
@@ -294,8 +283,8 @@ void esp_log_writev(esp_log_level_t level, const char* tag, const char* format, 
 
 /** @endcond */
 
-/// macro to output logs in startup code, before heap allocator and syscalls have been initialized. log at ``ESP_LOG_ERROR`` level. @see ``printf``,``ESP_LOGE``,``ESP_DRAM_LOGE``
-#define portGET_ARGUMENT_COUNT_INNER(zero, one, count, ...) count
+/// macro to output logs in startup code, before heap allocator and syscalls have been initialized.
+/// Log at ``ESP_LOG_ERROR`` level. @see ``printf``,``ESP_LOGE``,``ESP_DRAM_LOGE``
 
 /**
  * In the future, we want to switch to C++20. We also want to become compatible with clang.
@@ -391,8 +380,8 @@ void esp_log_writev(esp_log_level_t level, const char* tag, const char* format, 
  *
  * @param tag tag of the log, which can be used to change the log level by ``esp_log_level_set`` at runtime.
  * @param level level of the output log.
- * @param format format of the output log. see ``printf``
- * @param ... variables to be replaced into the log. see ``printf``
+ * @param format format of the output log. See ``printf``
+ * @param ... variables to be replaced into the log. See ``printf``
  *
  * @see ``printf``
  */
@@ -444,7 +433,7 @@ void esp_log_writev(esp_log_level_t level, const char* tag, const char* format, 
 
 
 /**
- * @brief Macro to output logs when the cache is disabled. log at ``ESP_LOG_ERROR`` level.
+ * @brief Macro to output logs when the cache is disabled. Log at ``ESP_LOG_ERROR`` level.
  *
  * @note Unlike normal logging macros, it's possible to use this macro when interrupts are
  * disabled or inside an ISR.

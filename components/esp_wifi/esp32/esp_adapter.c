@@ -1,16 +1,8 @@
-// Copyright 2015-2018 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include <stddef.h>
 #include <stdlib.h>
@@ -24,17 +16,18 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "freertos/event_groups.h"
-#include "freertos/xtensa_api.h"
 #include "freertos/portmacro.h"
 #include "freertos/xtensa_api.h"
 #include "esp_types.h"
-#include "esp_system.h"
+#include "esp_random.h"
+#include "esp_mac.h"
 #include "esp_task.h"
 #include "esp_intr_alloc.h"
 #include "esp_attr.h"
 #include "esp_log.h"
 #include "esp_event.h"
 #include "esp_heap_caps.h"
+#include "esp_timer.h"
 #include "esp_private/wifi_os_adapter.h"
 #include "esp_private/wifi.h"
 #include "esp_phy_init.h"
@@ -42,14 +35,15 @@
 #include "soc/syscon_reg.h"
 #include "hal/interrupt_controller_hal.h"
 #include "phy_init_data.h"
-#include "driver/periph_ctrl.h"
+#include "esp_private/periph_ctrl.h"
 #include "nvs.h"
 #include "os.h"
 #include "esp_smartconfig.h"
 #include "esp_coexist_internal.h"
 #include "esp_coexist_adapter.h"
 #include "esp32/dport_access.h"
-#include "esp_timer.h"
+#include "esp_rom_sys.h"
+#include "esp32/rom/ets_sys.h"
 
 #define TAG "esp_adapter"
 
@@ -189,7 +183,7 @@ static bool IRAM_ATTR env_is_chip_wrapper(void)
 
 static void set_intr_wrapper(int32_t cpu_no, uint32_t intr_source, uint32_t intr_num, int32_t intr_prio)
 {
-    intr_matrix_set(cpu_no, intr_source, intr_num);
+    esp_rom_route_intr_matrix(cpu_no, intr_source, intr_num);
 }
 
 static void clear_intr_wrapper(uint32_t intr_source, uint32_t intr_num)
@@ -652,12 +646,21 @@ static int coex_schm_curr_phase_idx_get_wrapper(void)
 #endif
 }
 
+static int coex_register_start_cb_wrapper(int (* cb)(void))
+{
+#if CONFIG_SW_COEXIST_ENABLE
+    return coex_register_start_cb(cb);
+#else
+    return 0;
+#endif
+}
+
 static void IRAM_ATTR esp_empty_wrapper(void)
 {
 
 }
 
-int32_t IRAM_ATTR coex_is_in_isr_wrapper(void)
+int IRAM_ATTR coex_is_in_isr_wrapper(void)
 {
     return !xPortCanYield();
 }
@@ -779,6 +782,7 @@ wifi_osi_funcs_t g_wifi_osi_funcs = {
     ._coex_schm_curr_phase_get = coex_schm_curr_phase_get_wrapper,
     ._coex_schm_curr_phase_idx_set = coex_schm_curr_phase_idx_set_wrapper,
     ._coex_schm_curr_phase_idx_get = coex_schm_curr_phase_idx_get_wrapper,
+    ._coex_register_start_cb = coex_register_start_cb_wrapper,
     ._magic = ESP_WIFI_OS_ADAPTER_MAGIC,
 };
 

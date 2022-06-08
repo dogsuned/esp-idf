@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2022 Espressif Systems (Shanghai) CO LTD
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import print_function
 
 import os
@@ -40,11 +42,6 @@ def create_project(target_path, name):
     replace_in_file(os.path.join(main_folder, 'CMakeLists.txt'), 'main', name)
     replace_in_file(os.path.join(target_path, 'CMakeLists.txt'), 'main', name)
     os.remove(os.path.join(target_path, 'README.md'))
-
-    # after manual removing "Makefile" and "component.mk" from `examples/get-started/sample_project`
-    # remove following two lines as well
-    os.remove(os.path.join(target_path, 'Makefile'))
-    os.remove(os.path.join(target_path, 'main', 'component.mk'))
 
 
 def create_component(target_path, name):

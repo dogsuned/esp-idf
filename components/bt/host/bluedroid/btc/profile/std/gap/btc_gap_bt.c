@@ -1,16 +1,8 @@
-// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include <string.h>
 #include "esp_bt_defs.h"
@@ -743,6 +735,7 @@ static void btc_gap_bt_read_remote_name_cmpl_callback(void *p_data)
     msg.pid = BTC_PID_GAP_BT;
     msg.act = BTC_GAP_BT_READ_REMOTE_NAME_EVT;
 
+    memcpy(param.read_rmt_name.bda,result->bd_addr,BD_ADDR_LEN);
     param.read_rmt_name.stat = btc_btm_status_to_esp_status(result->status);
     memcpy(param.read_rmt_name.rmt_name,result->remote_bd_name,ESP_BT_GAP_MAX_BDNAME_LEN);
 

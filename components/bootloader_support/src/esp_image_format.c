@@ -1,11 +1,11 @@
 /*
- * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <string.h>
 #include <sys/param.h>
-#include <soc/cpu.h>
+#include <esp_cpu.h>
 #include <bootloader_utility.h>
 #include <esp_secure_boot.h>
 #include <esp_fault.h>
@@ -18,7 +18,8 @@
 #include "bootloader_util.h"
 #include "bootloader_common.h"
 #include "esp_rom_sys.h"
-#include "soc/soc_memory_types.h"
+#include "bootloader_memory_utils.h"
+#include "soc/soc_caps.h"
 #if CONFIG_IDF_TARGET_ESP32
 #include "esp32/rom/secure_boot.h"
 #elif CONFIG_IDF_TARGET_ESP32S2
@@ -29,6 +30,9 @@
 #include "esp32c3/rom/secure_boot.h"
 #elif CONFIG_IDF_TARGET_ESP32H2
 #include "esp32h2/rom/secure_boot.h"
+#elif CONFIG_IDF_TARGET_ESP32C2
+#include "esp32c2/rom/rtc.h"
+#include "esp32c2/rom/secure_boot.h"
 #endif
 
 /* Checking signatures as part of verifying images is necessary:
@@ -123,24 +127,26 @@ static esp_err_t image_load(esp_image_load_mode_t mode, const esp_partition_pos_
     uint32_t checksum_word = ESP_ROM_CHECKSUM_INITIAL;
     uint32_t *checksum = (do_verify) ? &checksum_word : NULL;
     bootloader_sha256_handle_t sha_handle = NULL;
+    bool verify_sha;
 #if (SECURE_BOOT_CHECK_SIGNATURE == 1)
      /* used for anti-FI checks */
     uint8_t image_digest[HASH_LEN] = { [ 0 ... 31] = 0xEE };
     uint8_t verified_digest[HASH_LEN] = { [ 0 ... 31 ] = 0x01 };
 #endif
-#if CONFIG_SECURE_BOOT_V2_ENABLED
-    // For Secure Boot V2, we do verify signature on bootloader which includes the SHA calculation.
-    bool verify_sha = do_verify;
-#else // Secure boot not enabled
-    // For secure boot V1 on ESP32, we don't calculate SHA or verify signature on bootloaders.
-    // (For non-secure boot, we don't verify any SHA-256 hash appended to the bootloader because
-    // esptool.py may have rewritten the header - rely on esptool.py having verified the bootloader at flashing time, instead.)
-    bool verify_sha = (part->offset != ESP_BOOTLOADER_OFFSET) && do_verify;
-#endif
 
     if (data == NULL || part == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
+
+#if CONFIG_SECURE_BOOT_V2_ENABLED
+    // For Secure Boot V2, we do verify signature on bootloader which includes the SHA calculation.
+    verify_sha = do_verify;
+#else // Secure boot not enabled
+    // For secure boot V1 on ESP32, we don't calculate SHA or verify signature on bootloaders.
+    // (For non-secure boot, we don't verify any SHA-256 hash appended to the bootloader because
+    // esptool.py may have rewritten the header - rely on esptool.py having verified the bootloader at flashing time, instead.)
+    verify_sha = (part->offset != ESP_BOOTLOADER_OFFSET) && do_verify;
+#endif
 
     if (part->size > SIXTEEN_MB) {
         err = ESP_ERR_INVALID_ARG;
@@ -427,13 +433,22 @@ static bool verify_load_addresses(int segment_index, intptr_t load_addr, intptr_
             }
         }
     /* Sections entirely in RTC memory won't overlap with a vanilla bootloader but are valid load addresses, thus skipping them from the check */
-    } else if (esp_ptr_in_rtc_iram_fast(load_addr_p) && esp_ptr_in_rtc_iram_fast(load_inclusive_end_p)){
+    }
+#if SOC_RTC_FAST_MEM_SUPPORTED
+    else if (esp_ptr_in_rtc_iram_fast(load_addr_p) && esp_ptr_in_rtc_iram_fast(load_inclusive_end_p)){
         return true;
     } else if (esp_ptr_in_rtc_dram_fast(load_addr_p) && esp_ptr_in_rtc_dram_fast(load_inclusive_end_p)){
         return true;
-    } else if (esp_ptr_in_rtc_slow(load_addr_p) && esp_ptr_in_rtc_slow(load_inclusive_end_p)) {
+    }
+#endif
+
+#if SOC_RTC_SLOW_MEM_SUPPORTED
+    else if (esp_ptr_in_rtc_slow(load_addr_p) && esp_ptr_in_rtc_slow(load_inclusive_end_p)) {
         return true;
-    } else { /* Not a DRAM or an IRAM or RTC Fast IRAM, RTC Fast DRAM or RTC Slow address */
+    }
+#endif
+
+    else { /* Not a DRAM or an IRAM or RTC Fast IRAM, RTC Fast DRAM or RTC Slow address */
         reason = "bad load address range";
         goto invalid;
     }
@@ -696,6 +711,7 @@ static bool should_load(uint32_t load_addr)
     }
 
     if (!load_rtc_memory) {
+#if SOC_RTC_FAST_MEM_SUPPORTED
         if (load_addr >= SOC_RTC_IRAM_LOW && load_addr < SOC_RTC_IRAM_HIGH) {
             ESP_LOGD(TAG, "Skipping RTC fast memory segment at 0x%08x", load_addr);
             return false;
@@ -704,10 +720,14 @@ static bool should_load(uint32_t load_addr)
             ESP_LOGD(TAG, "Skipping RTC fast memory segment at 0x%08x", load_addr);
             return false;
         }
+#endif
+
+#if SOC_RTC_SLOW_MEM_SUPPORTED
         if (load_addr >= SOC_RTC_DATA_LOW && load_addr < SOC_RTC_DATA_HIGH) {
             ESP_LOGD(TAG, "Skipping RTC slow memory segment at 0x%08x", load_addr);
             return false;
         }
+#endif
     }
 
     return true;
@@ -769,7 +789,7 @@ static esp_err_t process_checksum(bootloader_sha256_handle_t sha_handle, uint32_
     length = length - unpadded_length;
 
     // Verify checksum
-    WORD_ALIGNED_ATTR uint8_t buf[16];
+    WORD_ALIGNED_ATTR uint8_t buf[16] = {0};
     if (!skip_check_checksum || sha_handle != NULL) {
         CHECK_ERR(bootloader_flash_read(data->start_addr + unpadded_length, buf, length, true));
     }
@@ -807,7 +827,7 @@ static esp_err_t verify_secure_boot_signature(bootloader_sha256_handle_t sha_han
         bootloader_munmap(simple_hash);
     }
 
-#if CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME
+#if CONFIG_SECURE_BOOT_V2_ENABLED
     // End of the image needs to be padded all the way to a 4KB boundary, after the simple hash
     // (for apps they are usually already padded due to --secure-pad-v2, only a problem if this option was not used.)
     uint32_t padded_end = (end + FLASH_SECTOR_SIZE - 1) & ~(FLASH_SECTOR_SIZE-1);
@@ -826,18 +846,18 @@ static esp_err_t verify_secure_boot_signature(bootloader_sha256_handle_t sha_han
 
     // Use hash to verify signature block
     esp_err_t err = ESP_ERR_IMAGE_INVALID;
-#if defined(CONFIG_SECURE_SIGNED_APPS_ECDSA_SCHEME) || defined(CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME)
+#if CONFIG_SECURE_BOOT || CONFIG_SECURE_SIGNED_APPS_NO_SECURE_BOOT
     const void *sig_block;
     ESP_FAULT_ASSERT(memcmp(image_digest, verified_digest, HASH_LEN) != 0); /* sanity check that these values start differently */
-#ifdef CONFIG_SECURE_SIGNED_APPS_ECDSA_SCHEME
+#if defined(CONFIG_SECURE_SIGNED_APPS_ECDSA_SCHEME)
     sig_block = bootloader_mmap(data->start_addr + data->image_len, sizeof(esp_secure_boot_sig_block_t));
     err = esp_secure_boot_verify_ecdsa_signature_block(sig_block, image_digest, verified_digest);
 #else
     sig_block = bootloader_mmap(end, sizeof(ets_secure_boot_signature_t));
-    err = esp_secure_boot_verify_rsa_signature_block(sig_block, image_digest, verified_digest);
+    err = esp_secure_boot_verify_sbv2_signature_block(sig_block, image_digest, verified_digest);
 #endif
     bootloader_munmap(sig_block);
-#endif // CONFIG_SECURE_SIGNED_APPS_ECDSA_SCHEME or CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME
+#endif // CONFIG_SECURE_BOOT || CONFIG_SECURE_SIGNED_APPS_NO_SECURE_BOOT
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Secure boot signature verification failed");
 
@@ -857,7 +877,7 @@ static esp_err_t verify_secure_boot_signature(bootloader_sha256_handle_t sha_han
         return ESP_ERR_IMAGE_INVALID;
     }
 
-#if CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME
+#if CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME || CONFIG_SECURE_SIGNED_APPS_ECDSA_V2_SCHEME
     // Adjust image length result to include the appended signature
     data->image_len = end - data->start_addr + sizeof(ets_secure_boot_signature_t);
 #endif
@@ -901,6 +921,12 @@ int esp_image_get_flash_size(esp_image_flash_size_t app_flash_size)
         return 8 * 1024 * 1024;
     case ESP_IMAGE_FLASH_SIZE_16MB:
         return 16 * 1024 * 1024;
+    case ESP_IMAGE_FLASH_SIZE_32MB:
+        return 32 * 1024 * 1024;
+    case ESP_IMAGE_FLASH_SIZE_64MB:
+        return 64 * 1024 * 1024;
+    case ESP_IMAGE_FLASH_SIZE_128MB:
+        return 128 * 1024 * 1024;
     default:
         return 0;
     }

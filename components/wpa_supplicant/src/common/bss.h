@@ -10,6 +10,7 @@
 #define BSS_H
 
 struct wpa_scan_res;
+struct wpa_supplicant;
 
 /**
  * struct wpa_bss - BSS table
@@ -58,7 +59,13 @@ struct wpa_bss {
 	size_t beacon_ie_len;
 	/* followed by ie_len octets of IEs */
 	/* followed by beacon_ie_len octets of IEs */
+	u8 ies[];
 };
+
+static inline const u8 * wpa_bss_ie_ptr(const struct wpa_bss *bss)
+{
+	return bss->ies;
+}
 
 void wpa_bss_update_start(struct wpa_supplicant *wpa_s);
 void wpa_bss_update_scan_res(struct wpa_supplicant *wpa_s,
@@ -75,6 +82,7 @@ struct wpa_bss * wpa_bss_get(struct wpa_supplicant *wpa_s, const u8 *bssid,
 struct wpa_bss * wpa_bss_get_bssid(struct wpa_supplicant *wpa_s,
 				   const u8 *bssid);
 const u8 * wpa_bss_get_ie(const struct wpa_bss *bss, u8 ie);
+const u8 * wpa_bss_get_vendor_ie(const struct wpa_bss *bss, u32 vendor_type);
 int wpa_bss_ext_capab(const struct wpa_bss *bss, unsigned int capab);
 struct wpa_bss * wpa_bss_get_next_bss(struct wpa_supplicant *wpa_s,
 				   struct wpa_bss *prev_bss);

@@ -1,16 +1,8 @@
-// Copyright 2015-2019 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /*******************************************************************************
  * NOTICE
@@ -28,6 +20,8 @@
 #include <string.h>
 
 #include "soc/spi_periph.h"
+#include "hal/assert.h"
+#include "soc/spi_mem_struct.h"
 #include "hal/spi_types.h"
 #include "hal/spi_flash_types.h"
 
@@ -38,15 +32,7 @@ extern "C" {
 #define spimem_flash_ll_get_hw(host_id)  (((host_id)==SPI1_HOST ?  &SPIMEM1 : NULL ))
 #define spimem_flash_ll_hw_get_id(dev)  ((dev) == (void*)&SPIMEM1? SPI1_HOST: -1)
 
-typedef typeof(SPIMEM1.clock) spimem_flash_ll_clock_reg_t;
-
-//Supported clock register values
-#define SPIMEM_FLASH_LL_CLKREG_VAL_5MHZ   ((spimem_flash_ll_clock_reg_t){.val=0x000F070F})   ///< Clock set to 5 MHz
-#define SPIMEM_FLASH_LL_CLKREG_VAL_10MHZ  ((spimem_flash_ll_clock_reg_t){.val=0x00070307})   ///< Clock set to 10 MHz
-#define SPIMEM_FLASH_LL_CLKREG_VAL_20MHZ  ((spimem_flash_ll_clock_reg_t){.val=0x00030103})   ///< Clock set to 20 MHz
-#define SPIMEM_FLASH_LL_CLKREG_VAL_26MHZ  ((spimem_flash_ll_clock_reg_t){.val=0x00020002})   ///< Clock set to 26 MHz
-#define SPIMEM_FLASH_LL_CLKREG_VAL_40MHZ  ((spimem_flash_ll_clock_reg_t){.val=0x00010001})   ///< Clock set to 40 MHz
-#define SPIMEM_FLASH_LL_CLKREG_VAL_80MHZ  ((spimem_flash_ll_clock_reg_t){.val=0x80000000})   ///< Clock set to 80 MHz
+typedef typeof(SPIMEM1.clock.val) spimem_flash_ll_clock_reg_t;
 
 /*------------------------------------------------------------------------------
  * Control
@@ -157,7 +143,7 @@ static inline void spimem_flash_ll_auto_resume_init(spi_mem_dev_t *dev, bool aut
  */
 static inline void spimem_flash_ll_suspend_cmd_setup(spi_mem_dev_t *dev, uint32_t sus_cmd)
 {
-    dev->flash_sus_ctrl.flash_pes_command = sus_cmd;
+    HAL_FORCE_MODIFY_U32_REG_FIELD(dev->flash_sus_ctrl, flash_pes_command, sus_cmd);
 }
 
 /**
@@ -169,7 +155,7 @@ static inline void spimem_flash_ll_suspend_cmd_setup(spi_mem_dev_t *dev, uint32_
  */
 static inline void spimem_flash_ll_resume_cmd_setup(spi_mem_dev_t *dev, uint32_t res_cmd)
 {
-    dev->flash_sus_ctrl.flash_per_command = res_cmd;
+    HAL_FORCE_MODIFY_U32_REG_FIELD(dev->flash_sus_ctrl, flash_per_command, res_cmd);
 }
 
 /**
@@ -226,7 +212,7 @@ static inline void spimem_flash_ll_set_read_sus_status(spi_mem_dev_t *dev, uint3
  */
 static inline void spimem_flash_ll_auto_wait_idle_init(spi_mem_dev_t *dev, bool auto_waiti)
 {
-    dev->flash_waiti_ctrl.waiti_cmd = 0x05; // Set the command to send, to fetch flash status reg value.
+    HAL_FORCE_MODIFY_U32_REG_FIELD(dev->flash_waiti_ctrl, waiti_cmd, 0x05); // Set the command to send, to fetch flash status reg value.
     dev->flash_waiti_ctrl.waiti_en = auto_waiti;  // enable auto wait-idle function.
 }
 
@@ -381,7 +367,8 @@ static inline void spimem_flash_ll_set_cs_pin(spi_mem_dev_t *dev, int pin)
 static inline void spimem_flash_ll_set_read_mode(spi_mem_dev_t *dev, esp_flash_io_mode_t read_mode)
 {
     typeof (dev->ctrl) ctrl = dev->ctrl;
-    ctrl.val &= ~(SPI_MEM_FREAD_QIO_M | SPI_MEM_FREAD_QUAD_M | SPI_MEM_FREAD_DIO_M | SPI_MEM_FREAD_DUAL_M);
+    ctrl.val &= ~(SPI_MEM_FREAD_QIO_M | SPI_MEM_FREAD_QUAD_M | SPI_MEM_FREAD_DIO_M | SPI_MEM_FREAD_DUAL_M | SPI_MEM_FCMD_OCT | SPI_MEM_FADDR_OCT | SPI_MEM_FDIN_OCT | SPI_MEM_FDOUT_OCT);
+    dev->ddr.fmem_ddr_en = 0;
     ctrl.val |= SPI_MEM_FASTRD_MODE_M;
     switch (read_mode) {
     case SPI_FLASH_FASTRD:
@@ -402,6 +389,19 @@ static inline void spimem_flash_ll_set_read_mode(spi_mem_dev_t *dev, esp_flash_i
     case SPI_FLASH_SLOWRD:
         ctrl.fastrd_mode = 0;
         break;
+    case SPI_FLASH_OPI_STR:
+        ctrl.faddr_oct = 1;
+        ctrl.fcmd_oct = 1;
+        ctrl.fdin_oct = 1;
+        ctrl.fdout_oct = 1;
+        break;
+    case SPI_FLASH_OPI_DTR:
+        ctrl.faddr_oct = 1;
+        ctrl.fcmd_oct = 1;
+        ctrl.fdin_oct = 1;
+        ctrl.fdout_oct = 1;
+        dev->ddr.fmem_ddr_en = 1;
+        break;
     default:
         abort();
     }
@@ -416,7 +416,7 @@ static inline void spimem_flash_ll_set_read_mode(spi_mem_dev_t *dev, esp_flash_i
  */
 static inline void spimem_flash_ll_set_clock(spi_mem_dev_t *dev, spimem_flash_ll_clock_reg_t *clock_val)
 {
-    dev->clock = *clock_val;
+    dev->clock.val = *clock_val;
 }
 
 /**
@@ -543,6 +543,59 @@ static inline void spimem_flash_ll_set_cs_setup(spi_mem_dev_t *dev, uint32_t cs_
 {
     dev->user.cs_setup = (cs_setup_time > 0 ? 1 : 0);
     dev->ctrl2.cs_setup_time = cs_setup_time - 1;
+}
+
+static inline void spimem_flash_ll_set_extra_dummy(spi_mem_dev_t *dev, uint32_t extra_dummy)
+{
+    dev->timing_cali.extra_dummy_cyclelen = extra_dummy;
+}
+
+/**
+ * Get the spi flash source clock frequency. Used for calculating
+ * the divider parameters.
+ *
+ * @param None
+ *
+ * @return the frequency of spi flash clock source.(MHz)
+ */
+static inline uint8_t spimem_flash_ll_get_source_freq_mhz(void)
+{
+    // Default is PLL480M, this is hard-coded.
+    // In the future, we can get the CPU clock source by calling interface.
+    uint8_t clock_val = 0;
+    switch (SPIMEM0.core_clk_sel.core_clk_sel) {
+        case 0:
+            clock_val = 80;
+            break;
+        case 1:
+            clock_val = 120;
+            break;
+        case 2:
+            clock_val = 160;
+            break;
+        default:
+            abort();
+    }
+    return clock_val;
+}
+
+/**
+ * Calculate spi_flash clock frequency division parameters for register.
+ *
+ * @param clkdiv frequency division factor
+ *
+ * @return Register setting for the given clock division factor.
+ */
+static inline uint32_t spimem_flash_ll_calculate_clock_reg(uint8_t clkdiv)
+{
+    uint32_t div_parameter;
+    // See comments of `clock` in `spi_mem_struct.h`
+    if (clkdiv == 1) {
+        div_parameter = (1 << 31);
+    } else {
+        div_parameter = ((clkdiv - 1) | (((clkdiv - 1) / 2 & 0xff) << 8 ) | (((clkdiv - 1) & 0xff) << 16));
+    }
+    return div_parameter;
 }
 
 #ifdef __cplusplus

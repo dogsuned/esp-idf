@@ -8,12 +8,7 @@
 #include "sdkconfig.h"
 #include "esp_err.h"
 #include "esp_log.h"
-#if CONFIG_IDF_TARGET_ESP32
-#include "esp32/rom/spi_flash.h"
-#elif CONFIG_IDF_TARGET_ESP32S2
-#include "esp32s2/rom/spi_flash.h"
-#include "esp32s2/rom/ets_sys.h"
-#endif
+#include "esp_rom_spiflash.h"
 #include "esp_rom_crc.h"
 #include "esp_rom_gpio.h"
 #include "esp_flash_partitions.h"
@@ -22,7 +17,6 @@
 #include "soc/gpio_periph.h"
 #include "soc/rtc.h"
 #include "soc/efuse_reg.h"
-#include "soc/soc_memory_types.h"
 #include "hal/gpio_ll.h"
 #include "esp_image_format.h"
 #include "bootloader_sha.h"
@@ -163,7 +157,11 @@ static void update_rtc_retain_mem_crc(void)
 
 void bootloader_common_reset_rtc_retain_mem(void)
 {
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wstringop-overflow"
+    #pragma GCC diagnostic ignored "-Warray-bounds"
     memset(rtc_retain_mem, 0, sizeof(rtc_retain_mem_t));
+    #pragma GCC diagnostic pop
 }
 
 uint16_t bootloader_common_get_rtc_retain_mem_reboot_counter(void)

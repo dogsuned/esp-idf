@@ -1,16 +1,8 @@
-// Copyright 2019 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2019-2022 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /*******************************************************************************
  * NOTICE
@@ -21,9 +13,12 @@
 #pragma once
 
 #include <stdlib.h>
+#include "hal/misc.h"
 #include "soc/dac_periph.h"
 #include "hal/dac_types.h"
 #include "soc/apb_saradc_struct.h"
+#include "soc/sens_struct.h"
+#include "soc/rtc_io_struct.h"
 #include "soc/apb_saradc_reg.h"
 
 #ifdef __cplusplus
@@ -74,10 +69,10 @@ static inline void dac_ll_update_output_value(dac_channel_t channel, uint8_t val
 {
     if (channel == DAC_CHANNEL_1) {
         SENS.sar_dac_ctrl2.dac_cw_en1 = 0;
-        RTCIO.pad_dac[channel].dac = value;
+        HAL_FORCE_MODIFY_U32_REG_FIELD(RTCIO.pad_dac[channel], dac, value);
     } else if (channel == DAC_CHANNEL_2) {
         SENS.sar_dac_ctrl2.dac_cw_en2 = 0;
-        RTCIO.pad_dac[channel].dac = value;
+        HAL_FORCE_MODIFY_U32_REG_FIELD(RTCIO.pad_dac[channel], dac, value);
     }
 }
 
@@ -144,8 +139,8 @@ static inline void dac_ll_cw_set_channel(dac_channel_t channel, bool enable)
  */
 static inline void dac_ll_cw_set_freq(uint32_t freq)
 {
-    uint32_t sw_freq = freq * 0xFFFF / RTC_FAST_CLK_FREQ_APPROX;
-    SENS.sar_dac_ctrl1.sw_fstep = (sw_freq > 0xFFFF) ? 0xFFFF : sw_freq;
+    uint32_t sw_freq = freq * 0xFFFF / SOC_CLK_RC_FAST_FREQ_APPROX;
+    HAL_FORCE_MODIFY_U32_REG_FIELD(SENS.sar_dac_ctrl1, sw_fstep, (sw_freq > 0xFFFF) ? 0xFFFF : sw_freq);
 }
 
 /**
@@ -192,12 +187,12 @@ static inline void dac_ll_cw_set_dc_offset(dac_channel_t channel, int8_t offset)
         if (SENS.sar_dac_ctrl2.dac_inv1 == DAC_CW_PHASE_180) {
             offset = 0 - offset;
         }
-        SENS.sar_dac_ctrl2.dac_dc1 = offset ? offset : (-128 - offset);
+        HAL_FORCE_MODIFY_U32_REG_FIELD(SENS.sar_dac_ctrl2, dac_dc1, offset ? offset : (-128 - offset));
     } else if (channel == DAC_CHANNEL_2) {
         if (SENS.sar_dac_ctrl2.dac_inv2 == DAC_CW_PHASE_180) {
             offset = 0 - offset;
         }
-        SENS.sar_dac_ctrl2.dac_dc2 = offset ? offset : (-128 - offset);
+        HAL_FORCE_MODIFY_U32_REG_FIELD(SENS.sar_dac_ctrl2, dac_dc2, offset ? offset : (-128 - offset));
     }
 }
 

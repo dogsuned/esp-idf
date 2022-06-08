@@ -1,16 +1,8 @@
-// Copyright 2015-2019 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 // The HAL layer for SDIO slave (common part)
 
@@ -30,7 +22,8 @@
     return ret_val;\
 } }while (0)
 
-static const char TAG[] = "SDIO_HAL";
+/* The tag may be unused if log level is set to NONE  */
+static const __attribute__((unused)) char TAG[] = "SDIO_HAL";
 
 static esp_err_t init_send_queue(sdio_slave_context_t *hal);
 
@@ -325,11 +318,11 @@ static void send_new_packet(sdio_slave_context_t *hal)
 
     // update pkt_len register to allow host reading.
     sdio_slave_ll_send_write_len(hal->slc, end_desc->pkt_len);
-    ESP_EARLY_LOGV(TAG, "send_length_write: %d, last_len: %08X", end_desc->pkt_len, sdio_slave_ll_send_read_len(hal->host));
+    HAL_EARLY_LOGV(TAG, "send_length_write: %d, last_len: %08X", end_desc->pkt_len, sdio_slave_ll_send_read_len(hal->host));
 
     send_set_state(hal, STATE_SENDING);
 
-    ESP_EARLY_LOGD(TAG, "restart new send: %p->%p, pkt_len: %d", start_desc, end_desc, end_desc->pkt_len);
+    HAL_EARLY_LOGD(TAG, "restart new send: %p->%p, pkt_len: %d", start_desc, end_desc, end_desc->pkt_len);
 }
 
 static esp_err_t send_check_new_packet(sdio_slave_context_t *hal)
@@ -374,7 +367,7 @@ esp_err_t sdio_slave_hal_send_reset_counter(sdio_slave_context_t* hal)
                      "reset counter when transmission started", ESP_ERR_INVALID_STATE);
 
     sdio_slave_ll_send_write_len(hal->slc, 0);
-    ESP_EARLY_LOGV(TAG, "last_len: %08X", sdio_slave_ll_send_read_len(hal->host));
+    HAL_EARLY_LOGV(TAG, "last_len: %08X", sdio_slave_ll_send_read_len(hal->host));
 
     hal->tail_pkt_len = 0;
     sdio_slave_hal_send_desc_t *desc = hal->in_flight_head;
@@ -429,7 +422,8 @@ static esp_err_t send_get_inflight_desc(sdio_slave_context_t *hal, void **out_ar
 static esp_err_t send_get_unsent_desc(sdio_slave_context_t *hal, void **out_arg, uint32_t *out_return_cnt)
 {
     esp_err_t ret;
-    sdio_slave_hal_send_desc_t *head, *tail;
+    sdio_slave_hal_send_desc_t *head = NULL;
+    sdio_slave_hal_send_desc_t *tail = NULL;
     ret = sdio_ringbuf_recv(&(hal->send_desc_queue), (uint8_t **) &head, (uint8_t **) &tail, RINGBUF_GET_ONE);
 
     if (ret == ESP_OK) {
@@ -674,20 +668,20 @@ void sdio_slave_hal_load_buf(sdio_slave_context_t *hal, lldesc_t *desc)
 
 static inline void show_queue_item(lldesc_t *item)
 {
-    ESP_EARLY_LOGI(TAG, "=> %p: size: %d(%d), eof: %d, owner: %d", item, item->size, item->length, item->eof, item->owner);
-    ESP_EARLY_LOGI(TAG, "   buf: %p, stqe_next: %p", item->buf, item->qe.stqe_next);
+    HAL_EARLY_LOGI(TAG, "=> %p: size: %d(%d), eof: %d, owner: %d", item, item->size, item->length, item->eof, item->owner);
+    HAL_EARLY_LOGI(TAG, "   buf: %p, stqe_next: %p", item->buf, item->qe.stqe_next);
 }
 
 static void __attribute((unused)) dump_queue(sdio_slave_hal_recv_stailq_t *queue)
 {
     int cnt = 0;
     lldesc_t *item = NULL;
-    ESP_EARLY_LOGI(TAG, ">>>>> first: %p, last: %p <<<<<", queue->stqh_first, queue->stqh_last);
+    HAL_EARLY_LOGI(TAG, ">>>>> first: %p, last: %p <<<<<", queue->stqh_first, queue->stqh_last);
     STAILQ_FOREACH(item, queue, qe) {
         cnt++;
         show_queue_item(item);
     }
-    ESP_EARLY_LOGI(TAG, "total: %d", cnt);
+    HAL_EARLY_LOGI(TAG, "total: %d", cnt);
 }
 
 /*---------------------------------------------------------------------------

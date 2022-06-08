@@ -1,16 +1,8 @@
-// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include <stdlib.h>
 #include <string.h>
@@ -47,12 +39,24 @@
 #if (BTC_SPP_INCLUDED == TRUE)
 #include "btc_spp.h"
 #endif /* #if (BTC_SPP_INCLUDED == TRUE) */
+#if (BTC_L2CAP_INCLUDED == TRUE)
+#include "btc_l2cap.h"
+#endif /* #if (BTC_L2CAP_INCLUDED == TRUE) */
+#if (BTC_SDP_INCLUDED == TRUE)
+#include "btc_sdp.h"
+#endif /* #if (BTC_SDP_INCLUDED == TRUE) */
 #if BTC_HF_INCLUDED
 #include "btc_hf_ag.h"
 #endif/* #if BTC_HF_INCLUDED */
 #if BTC_HF_CLIENT_INCLUDED
 #include "btc_hf_client.h"
 #endif  /* #if BTC_HF_CLIENT_INCLUDED */
+#if BTC_HD_INCLUDED == TRUE
+#include "btc_hd.h"
+#endif /* BTC_HD_INCLUDED */
+#if BTC_HH_INCLUDED == TRUE
+#include "btc_hh.h"
+#endif /* BTC_HH_INCLUDED */
 #endif /* #if CLASSIC_BT_INCLUDED */
 #endif
 
@@ -114,12 +118,24 @@ static const btc_func_t profile_tab[BTC_PID_NUM] = {
 #if (BTC_SPP_INCLUDED == TRUE)
     [BTC_PID_SPP]         = {btc_spp_call_handler,        btc_spp_cb_handler      },
 #endif /* #if (BTC_SPP_INCLUDED == TRUE) */
+#if (BTC_L2CAP_INCLUDED == TRUE)
+    [BTC_PID_L2CAP]       = {btc_l2cap_call_handler,      btc_l2cap_cb_handler    },
+#endif /* #if (BTC_L2CAP_INCLUDED == TRUE) */
+#if (BTC_SDP_INCLUDED == TRUE)
+    [BTC_PID_SDP]       = {btc_sdp_call_handler,          btc_sdp_cb_handler      },
+#endif /* #if (BTC_SDP_INCLUDED == TRUE) */
 #if BTC_HF_INCLUDED
     [BTC_PID_HF]   = {btc_hf_call_handler,  btc_hf_cb_handler},
 #endif  /* #if BTC_HF_INCLUDED */
 #if BTC_HF_CLIENT_INCLUDED
     [BTC_PID_HF_CLIENT]   = {btc_hf_client_call_handler,  btc_hf_client_cb_handler},
 #endif  /* #if BTC_HF_CLIENT_INCLUDED */
+#if BTC_HD_INCLUDED
+    [BTC_PID_HD]          = {btc_hd_call_handler,          btc_hd_cb_handler      },
+#endif
+#if BTC_HH_INCLUDED
+    [BTC_PID_HH]          = {btc_hh_call_handler,          btc_hh_cb_handler      },
+#endif
 #endif /* #if CLASSIC_BT_INCLUDED */
 #endif
 #if CONFIG_BLE_MESH

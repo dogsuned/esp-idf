@@ -86,7 +86,7 @@ The driver of FIFOs works as below:
 #include "soc/gpio_periph.h"
 #include "hal/cpu_hal.h"
 #include "freertos/semphr.h"
-#include "driver/periph_ctrl.h"
+#include "esp_private/periph_ctrl.h"
 #include "driver/gpio.h"
 #include "hal/sdio_slave_hal.h"
 #include "hal/gpio_hal.h"
@@ -236,7 +236,7 @@ static esp_err_t init_context(const sdio_slave_config_t *config)
     sdio_ringbuf_t *buf = &(context.hal->send_desc_queue);
     //one item is not used.
     buf->size = SDIO_SLAVE_SEND_DESC_SIZE * (config->send_queue_size + 1);
-    buf->data = (uint8_t *)heap_caps_malloc(buf->size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    buf->data = (uint8_t *)heap_caps_malloc(buf->size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
     if (buf->data == NULL) {
         goto no_mem;
     }
@@ -403,10 +403,6 @@ esp_err_t sdio_slave_start(void)
     critical_enter_recv();
     sdio_slave_hal_recv_start(context.hal);
     critical_exit_recv();
-    ret = ESP_OK;
-    if (ret != ESP_OK) {
-        return ret;
-    }
 
     sdio_slave_hal_set_ioready(context.hal, true);
     return ESP_OK;
@@ -701,7 +697,8 @@ static esp_err_t recv_flush_data(void)
 static void sdio_intr_recv(void *arg)
 {
     portBASE_TYPE yield = 0;
-    while (sdio_slave_hal_recv_done(context.hal)) {
+    bool triggered = sdio_slave_hal_recv_done(context.hal);
+    while (triggered) {
         portENTER_CRITICAL_ISR(&context.recv_spinlock);
         bool has_next_item = sdio_slave_hal_recv_has_next_item(context.hal);
         portEXIT_CRITICAL_ISR(&context.recv_spinlock);
@@ -710,8 +707,9 @@ static void sdio_intr_recv(void *arg)
             xSemaphoreGiveFromISR(context.recv_event, &yield);
             continue;   //check the linked list again skip the interrupt checking
         }
-        // if no more items on the list, go back and check again the interrupt,
+        // if no more items on the list, check the interrupt again,
         // will loop until the interrupt bit is kept cleared.
+        triggered = sdio_slave_hal_recv_done(context.hal);
     }
     if (yield) {
         portYIELD_FROM_ISR();
@@ -736,7 +734,7 @@ sdio_slave_buf_handle_t sdio_slave_recv_register_buf(uint8_t *start)
 {
     SDIO_SLAVE_CHECK(esp_ptr_dma_capable(start) && (uint32_t)start % 4 == 0,
                      "buffer to register should be DMA capable and 32-bit aligned", NULL);
-    recv_desc_t *desc = (recv_desc_t *)heap_caps_malloc(sizeof(recv_desc_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    recv_desc_t *desc = (recv_desc_t *)heap_caps_malloc(sizeof(recv_desc_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
     if (desc == NULL) {
         SDIO_SLAVE_LOGE("cannot allocate lldesc for new buffer");
         return NULL;

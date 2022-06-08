@@ -3,7 +3,7 @@ ASIO port
 
 Overview
 --------
-Asio is a cross-platform C++ library, see https://think-async.com. It provides a consistent asynchronous model using a modern C++ approach.
+Asio is a cross-platform C++ library, see https://think-async.com/Asio/. It provides a consistent asynchronous model using a modern C++ approach.
 
 
 ASIO documentation
@@ -36,8 +36,7 @@ ESP examples are based on standard asio :example:`protocols/asio`:
 
 - :example:`protocols/asio/udp_echo_server`
 - :example:`protocols/asio/tcp_echo_server`
-- :example:`protocols/asio/chat_client`
-- :example:`protocols/asio/chat_server`
+- :example:`protocols/asio/asio_chat`
 - :example:`protocols/asio/ssl_client_server`
 
 Please refer to the specific example README.md for details

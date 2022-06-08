@@ -197,6 +197,18 @@ SECTIONS
     . = ALIGN(4);
   } > dram0_0_seg
 
+  /**
+   * This section holds data that won't be initialised when startup.
+   * This section locates in External RAM region.
+   */
+  .ext_ram_noinit (NOLOAD) :
+  {
+    _ext_ram_noinit_start = ABSOLUTE(.);
+    *(.ext_ram_noinit*)
+    . = ALIGN(4);
+    _ext_ram_noinit_end = ABSOLUTE(.);
+  } > extern_ram_seg
+
   /*This section holds data that should not be initialized at power up.
     The section located in Internal SRAM memory region. The macro _NOINIT
     can be used as attribute to place data into this section.
@@ -211,7 +223,7 @@ SECTIONS
     _noinit_end = ABSOLUTE(.);
   } > dram0_0_seg
 
-   /* external memory bss, from any global variable with EXT_RAM_ATTR attribute*/
+   /* external memory bss, from any global variable with EXT_RAM_BSS_ATTR attribute*/
   .ext_ram.bss (NOLOAD) :
   {
     _ext_ram_bss_start = ABSOLUTE(.);
@@ -337,7 +349,7 @@ SECTIONS
       * safe access to up to 16 bytes after the last real instruction, add
       * dummy bytes to ensure this
       */
-    . += 16;
+    . += _esp_flash_mmap_prefetch_pad_size;
 
     _text_end = ABSOLUTE(.);
     _etext = .;

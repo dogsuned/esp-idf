@@ -6,10 +6,7 @@ IDF Monitor
 
 The IDF monitor tool is mainly a serial terminal program which relays serial data to and from the target device's serial port. It also provides some IDF-specific features.
 
-This tool can be launched from an IDF project by running ``idf.py monitor``. 
-
-For the legacy GNU Make system, run ``make monitor``.
-
+This tool can be launched from an IDF project by running ``idf.py monitor``.
 
 Keyboard Shortcuts
 ==================
@@ -187,6 +184,15 @@ To decode each address, IDF Monitor runs the following command in the background
 
     Set environment variable ``ESP_MONITOR_DECODE`` to ``0`` or call idf_monitor.py with specific command line option: ``idf_monitor.py --disable-address-decoding`` to disable address decoding.
 
+Reset of the chip target on connect
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The reset of the target chip is performed using DTR and RTS serial lines. For preventing the reset of the target on idf monitor startup call idf_monitor.py with specific command line option: ``idf_monitor.py --no-reset``.
+
+.. note::
+
+    The same behavior can be achieved using ``idf.py monitor`` interface with specific command line option: ``--no-reset``. To prevent the reset on startup is required to call the command with explicitly set port ``idf.py monitor --no-reset -p [PORT]``
+
+
 Launching GDB with GDBStub
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -271,7 +277,7 @@ Issues Observed on Windows
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - Arrow keys, as well as some other keys, do not work in GDB due to Windows Console limitations.
-- Occasionally, when "idf.py" or "make" exits, it might stall for up to 30 seconds before IDF Monitor resumes.
+- Occasionally, when "idf.py" exits, it might stall for up to 30 seconds before IDF Monitor resumes.
 - When "gdb" is run, it might stall for a short time before it begins communicating with the GDBStub.
 
 .. _addr2line: https://sourceware.org/binutils/docs/binutils/addr2line.html

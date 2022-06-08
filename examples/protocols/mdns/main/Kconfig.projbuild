@@ -1,5 +1,7 @@
 menu "Example Configuration"
 
+    orsource "$IDF_PATH/examples/common_components/env_caps/$IDF_TARGET/Kconfig.env_caps"
+
     config MDNS_HOSTNAME
         string "mDNS Hostname"
         default "esp32-mdns"
@@ -33,5 +35,21 @@ menu "Example Configuration"
         help
             If enabled, a portion of MAC address is added to the hostname, this is used
             for evaluation of tests in CI
+
+    config MDNS_BUTTON_GPIO
+        int "Button GPIO to trigger querries"
+        range ENV_GPIO_RANGE_MIN ENV_GPIO_IN_RANGE_MAX
+        default 0
+        help
+            Set the GPIO number used as mDNS test button
+
+    config MDNS_ADD_CUSTOM_NETIF
+        bool "Add user netif to mdns service"
+        default n
+        help
+            If enabled, we try to add a custom netif to mdns service.
+            Note that for using with common connection example code, we have to disable
+            all predefined interfaces in mdns component setup (since we're adding one
+            of the default interfaces)
 
 endmenu

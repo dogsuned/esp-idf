@@ -10,7 +10,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_netif_ip_addr.h"
-#include "esp_system.h"
+#include "esp_mac.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
@@ -22,7 +22,7 @@
 
 
 #define EXAMPLE_MDNS_INSTANCE CONFIG_MDNS_INSTANCE
-#define EXAMPLE_BUTTON_GPIO     0
+#define EXAMPLE_BUTTON_GPIO   CONFIG_MDNS_BUTTON_GPIO
 
 static const char * TAG = "mdns-test";
 static char * generate_hostname(void);
@@ -53,6 +53,10 @@ static void initialise_mdns(void)
 
     //initialize service
     ESP_ERROR_CHECK( mdns_service_add("ESP32-WebServer", "_http", "_tcp", 80, serviceTxtData, 3) );
+    ESP_ERROR_CHECK( mdns_service_subtype_add_for_host("ESP32-WebServer", "_http", "_tcp", NULL, "_server") );
+#if CONFIG_MDNS_MULTIPLE_INSTANCE
+    ESP_ERROR_CHECK( mdns_service_add("ESP32-WebServer1", "_http", "_tcp", 80, NULL, 0) );
+#endif
 
 #if CONFIG_MDNS_PUBLISH_DELEGATE_HOST
     char *delegated_hostname;
@@ -79,35 +83,33 @@ static void initialise_mdns(void)
     free(hostname);
 }
 
-/* these strings match tcpip_adapter_if_t enumeration */
-static const char * if_str[] = {"STA", "AP", "ETH", "MAX"};
-
 /* these strings match mdns_ip_protocol_t enumeration */
 static const char * ip_protocol_str[] = {"V4", "V6", "MAX"};
 
-static void mdns_print_results(mdns_result_t * results){
-    mdns_result_t * r = results;
-    mdns_ip_addr_t * a = NULL;
+static void mdns_print_results(mdns_result_t *results)
+{
+    mdns_result_t *r = results;
+    mdns_ip_addr_t *a = NULL;
     int i = 1, t;
-    while(r){
-        printf("%d: Interface: %s, Type: %s\n", i++, if_str[r->tcpip_if], ip_protocol_str[r->ip_protocol]);
-        if(r->instance_name){
-            printf("  PTR : %s\n", r->instance_name);
+    while (r) {
+        printf("%d: Interface: %s, Type: %s, TTL: %u\n", i++, esp_netif_get_ifkey(r->esp_netif), ip_protocol_str[r->ip_protocol],
+               r->ttl);
+        if (r->instance_name) {
+            printf("  PTR : %s.%s.%s\n", r->instance_name, r->service_type, r->proto);
         }
-        if(r->hostname){
+        if (r->hostname) {
             printf("  SRV : %s.local:%u\n", r->hostname, r->port);
         }
-        if(r->txt_count){
+        if (r->txt_count) {
             printf("  TXT : [%zu] ", r->txt_count);
-            for(t=0; t<r->txt_count; t++){
-                printf("%s=%s(%d); ", r->txt[t].key, r->txt[t].value?r->txt[t].value:"NULL",
-                       r->txt_value_len[t]);
+            for (t = 0; t < r->txt_count; t++) {
+                printf("%s=%s(%d); ", r->txt[t].key, r->txt[t].value ? r->txt[t].value : "NULL", r->txt_value_len[t]);
             }
             printf("\n");
         }
         a = r->addr;
-        while(a){
-            if(a->addr.type == ESP_IPADDR_TYPE_V6){
+        while (a) {
+            if (a->addr.type == ESP_IPADDR_TYPE_V6) {
                 printf("  AAAA: " IPV6STR "\n", IPV62STR(a->addr.u_addr.ip6));
             } else {
                 printf("  A   : " IPSTR "\n", IP2STR(&(a->addr.u_addr.ip4)));
@@ -116,7 +118,6 @@ static void mdns_print_results(mdns_result_t * results){
         }
         r = r->next;
     }
-
 }
 
 static void query_mdns_service(const char * service_name, const char * proto)
@@ -142,7 +143,7 @@ static bool check_and_print_result(mdns_search_once_t *search)
 {
     // Check if any result is available
     mdns_result_t * result = NULL;
-    if (!mdns_query_async_get_results(search, 0, &result)) {
+    if (!mdns_query_async_get_results(search, 0, &result, NULL)) {
         return false;
     }
 
@@ -169,9 +170,8 @@ static void query_mdns_hosts_async(const char * host_name)
 {
     ESP_LOGI(TAG, "Query both A and AAA: %s.local", host_name);
 
-    mdns_search_once_t *s_a = mdns_query_async_new(host_name, NULL, NULL, MDNS_TYPE_A, 1000, 1);
-    mdns_query_async_delete(s_a);
-    mdns_search_once_t *s_aaaa = mdns_query_async_new(host_name, NULL, NULL, MDNS_TYPE_AAAA, 1000, 1);
+    mdns_search_once_t *s_a = mdns_query_async_new(host_name, NULL, NULL, MDNS_TYPE_A, 1000, 1, NULL);
+    mdns_search_once_t *s_aaaa = mdns_query_async_new(host_name, NULL, NULL, MDNS_TYPE_AAAA, 1000, 1, NULL);
     while (s_a || s_aaaa) {
         if (s_a && check_and_print_result(s_a)) {
             ESP_LOGI(TAG, "Query A %s.local finished", host_name);
@@ -183,6 +183,7 @@ static void query_mdns_hosts_async(const char * host_name)
             mdns_query_async_delete(s_aaaa);
             s_aaaa = NULL;
         }
+        vTaskDelay(50 / portTICK_PERIOD_MS);
     }
 }
 
@@ -265,6 +266,18 @@ void app_main(void)
      */
     ESP_ERROR_CHECK(example_connect());
 
+#if defined(CONFIG_MDNS_ADD_CUSTOM_NETIF) && !defined(CONFIG_MDNS_PREDEF_NETIF_STA) && !defined(CONFIG_MDNS_PREDEF_NETIF_ETH)
+    /* Demonstration of adding a custom netif to mdns service, but we're adding the default example one,
+     * so we must disable all predefined interfaces (PREDEF_NETIF_STA, AP and ETH) first
+     */
+    ESP_ERROR_CHECK(mdns_register_netif(EXAMPLE_INTERFACE));
+    /* It is not enough to just register the interface, we have to enable is manually.
+     * This is typically performed in "GOT_IP" event handler, but we call it here directly
+     * since the `EXAMPLE_INTERFACE` netif is connected already, to keep the example simple.
+     */
+    ESP_ERROR_CHECK(mdns_netif_action(EXAMPLE_INTERFACE, MDNS_EVENT_ENABLE_IP4));
+    ESP_ERROR_CHECK(mdns_netif_action(EXAMPLE_INTERFACE, MDNS_EVENT_ANNOUNCE_IP4));
+#endif
     initialise_button();
     xTaskCreate(&mdns_example_task, "mdns_example_task", 2048, NULL, 5, NULL);
 }

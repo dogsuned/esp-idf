@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -28,7 +28,10 @@ extern "C" {
 #endif
 #define UART_NUM_MAX           (SOC_UART_NUM) /*!< UART port max */
 
-#define UART_PIN_NO_CHANGE      (-1)         /*!< Constant for uart_set_pin function which indicates that UART pin should not be changed */
+/* @brief When calling `uart_set_pin`, instead of GPIO number, `UART_PIN_NO_CHANGE`
+ *        can be provided to keep the currently allocated pin.
+ */
+#define UART_PIN_NO_CHANGE      (-1)
 
 #define UART_FIFO_LEN           SOC_UART_FIFO_LEN       ///< Length of the UART HW FIFO
 #define UART_BITRATE_MAX        SOC_UART_BITRATE_MAX    ///< Maximum configurable bitrate
@@ -55,6 +58,9 @@ typedef enum {
     UART_PARITY_ERR,        /*!< UART RX parity event*/
     UART_DATA_BREAK,        /*!< UART TX data and break event*/
     UART_PATTERN_DET,       /*!< UART pattern detected */
+#if SOC_UART_SUPPORT_WAKEUP_INT
+    UART_WAKEUP,            /*!< UART wakeup event */
+#endif
     UART_EVENT_MAX,         /*!< UART event max index*/
 } uart_event_type_t;
 
@@ -349,44 +355,22 @@ esp_err_t uart_disable_tx_intr(uart_port_t uart_num);
 esp_err_t uart_enable_tx_intr(uart_port_t uart_num, int enable, int thresh);
 
 /**
- * @brief Register UART interrupt handler (ISR).
+ * @brief Assign signals of a UART peripheral to GPIO pins
  *
- * @note UART ISR handler will be attached to the same CPU core that this function is running on.
- *
- * @param uart_num UART port number, the max port number is (UART_NUM_MAX -1).
- * @param fn  Interrupt handler function.
- * @param arg parameter for handler function
- * @param intr_alloc_flags Flags used to allocate the interrupt. One or multiple (ORred)
- *        ESP_INTR_FLAG_* values. See esp_intr_alloc.h for more info.
- * @param handle Pointer to return handle. If non-NULL, a handle for the interrupt will
- *        be returned here.
- *
- * @return
- *     - ESP_OK   Success
- *     - ESP_FAIL Parameter error
- */
-esp_err_t uart_isr_register(uart_port_t uart_num, void (*fn)(void*), void * arg, int intr_alloc_flags,  uart_isr_handle_t *handle);
-
-/**
- * @brief Free UART interrupt handler registered by uart_isr_register. Must be called on the same core as
- * uart_isr_register was called.
- *
- * @param uart_num UART port number, the max port number is (UART_NUM_MAX -1).
- *
- * @return
- *     - ESP_OK   Success
- *     - ESP_FAIL Parameter error
- */
-esp_err_t uart_isr_free(uart_port_t uart_num);
-
-/**
- * @brief Set UART pin number
+ * @note If the GPIO number configured for a UART signal matches one of the
+ *       IOMUX signals for that GPIO, the signal will be connected directly
+ *       via the IOMUX. Otherwise the GPIO and signal will be connected via
+ *       the GPIO Matrix. For example, if on an ESP32 the call
+ *       `uart_set_pin(0, 1, 3, -1, -1)` is performed, as GPIO1 is UART0's
+ *       default TX pin and GPIO3 is UART0's default RX pin, both will be
+ *       connected to respectively U0TXD and U0RXD through the IOMUX, totally
+ *       bypassing the GPIO matrix.
+ *       The check is performed on a per-pin basis. Thus, it is possible to have
+ *       RX pin binded to a GPIO through the GPIO matrix, whereas TX is binded
+ *       to its GPIO through the IOMUX.
  *
  * @note Internal signal can be output to multiple GPIO pads.
  *       Only one GPIO pad can connect with input signal.
- *
- * @note Instead of GPIO number a macro 'UART_PIN_NO_CHANGE' may be provided
-         to keep the currently allocated pin.
  *
  * @param uart_num   UART port number, the max port number is (UART_NUM_MAX -1).
  * @param tx_io_num  UART TX pin GPIO number.
@@ -595,31 +579,6 @@ esp_err_t uart_get_buffered_data_len(uart_port_t uart_num, size_t* size);
  */
 esp_err_t uart_disable_pattern_det_intr(uart_port_t uart_num);
 
-#if CONFIG_IDF_TARGET_ESP32
-/**
- * @brief UART enable pattern detect function.
- *        Designed for applications like 'AT commands'.
- *        When the hardware detect a series of one same character, the interrupt will be triggered.
- * @note  This function only works for esp32. And this function is deprecated, please use
- *        uart_enable_pattern_det_baud_intr instead.
- *
- * @param uart_num UART port number.
- * @param pattern_chr character of the pattern.
- * @param chr_num number of the character, 8bit value.
- * @param chr_tout timeout of the interval between each pattern characters, 24bit value, unit is APB (80Mhz) clock cycle.
- *        When the duration is less than this value, it will not take this data as at_cmd char.
- * @param post_idle idle time after the last pattern character, 24bit value, unit is APB (80Mhz) clock cycle.
- *        When the duration is less than this value, it will not take the previous data as the last at_cmd char
- * @param pre_idle idle time before the first pattern character, 24bit value, unit is APB (80Mhz) clock cycle.
- *        When the duration is less than this value, it will not take this data as the first at_cmd char.
- *
- * @return
- *     - ESP_OK Success
- *     - ESP_FAIL Parameter error
- */
-esp_err_t uart_enable_pattern_det_intr(uart_port_t uart_num, char pattern_chr, uint8_t chr_num, int chr_tout, int post_idle, int pre_idle) __attribute__((deprecated));
-#endif
-
 /**
  * @brief UART enable pattern detect function.
  *        Designed for applications like 'AT commands'.
@@ -784,8 +743,7 @@ esp_err_t uart_get_collision_flag(uart_port_t uart_num, bool* collision_flag);
  * be obtained from UART FIFO). Depending on the baud rate, a few characters
  * after that will also not be received. Note that when the chip enters and exits
  * light sleep mode, APB frequency will be changing. To make sure that UART has
- * correct baud rate all the time, select REF_TICK as UART clock source,
- * by setting use_ref_tick field in uart_config_t to true.
+ * correct baud rate all the time, select UART_SCLK_REF_TICK or UART_SCLK_XTAL as UART clock source in uart_config_t::source_clk.
  *
  * @note in ESP32, the wakeup signal can only be input via IO_MUX (i.e.
  *       GPIO3 should be configured as function_1 to wake up UART0,

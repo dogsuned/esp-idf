@@ -2,7 +2,7 @@ set(srcs
     "src/bootloader_common.c"
     "src/bootloader_common_loader.c"
     "src/bootloader_clock_init.c"
-    "src/bootloader_flash.c"
+    "bootloader_flash/src/bootloader_flash.c"
     "src/bootloader_mem.c"
     "src/bootloader_random.c"
     "src/bootloader_random_${IDF_TARGET}.c"
@@ -11,13 +11,14 @@ set(srcs
     "src/flash_encrypt.c"
     "src/secure_boot.c"
     "src/flash_partitions.c"
-    "src/flash_qio_mode.c"
-    "src/bootloader_flash_config_${IDF_TARGET}.c"
-    "src/bootloader_efuse_${IDF_TARGET}.c"
+    "bootloader_flash/src/flash_qio_mode.c"
+    "bootloader_flash/src/bootloader_flash_config_${IDF_TARGET}.c"
+    "src/bootloader_efuse.c"
     )
 
 if(BOOTLOADER_BUILD)
-    set(include_dirs "include" "include_bootloader")
+    set(include_dirs "include" "bootloader_flash/include"
+        "include_bootloader")
     set(priv_requires micro-ecc spi_flash efuse)
     list(APPEND srcs
     "src/bootloader_init.c"
@@ -26,13 +27,14 @@ if(BOOTLOADER_BUILD)
     "src/bootloader_console_loader.c"
     "src/bootloader_panic.c"
     "src/${IDF_TARGET}/bootloader_sha.c"
+    "src/${IDF_TARGET}/bootloader_soc.c"
     "src/${IDF_TARGET}/bootloader_${IDF_TARGET}.c"
     )
     list(APPEND priv_requires hal)
 else()
     list(APPEND srcs
         "src/idf/bootloader_sha.c")
-    set(include_dirs "include")
+    set(include_dirs "include" "bootloader_flash/include")
     set(priv_include_dirs "include_bootloader")
     # heap is required for `heap_memory_layout.h` header
     set(priv_requires spi_flash mbedtls efuse app_update heap)
@@ -53,11 +55,9 @@ if(BOOTLOADER_BUILD)
                              "src/${IDF_TARGET}/secure_boot_secure_features.c")
         endif()
 
-        if(CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME)
-            list(APPEND srcs "src/secure_boot_v2/secure_boot_signatures_bootloader.c")
-        endif()
         if(CONFIG_SECURE_BOOT_V2_ENABLED)
-            list(APPEND srcs "src/secure_boot_v2/secure_boot.c"
+            list(APPEND srcs "src/secure_boot_v2/secure_boot_signatures_bootloader.c"
+                             "src/secure_boot_v2/secure_boot.c"
                              "src/${IDF_TARGET}/secure_boot_secure_features.c")
         endif()
     endif()
@@ -69,6 +69,11 @@ else()
 
         if(CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME)
             list(APPEND srcs "src/secure_boot_v2/secure_boot_signatures_app.c")
+            list(APPEND srcs "src/secure_boot_v2/secure_boot_rsa_signature.c")
+        endif()
+        if(CONFIG_SECURE_SIGNED_APPS_ECDSA_V2_SCHEME)
+            list(APPEND srcs "src/secure_boot_v2/secure_boot_signatures_app.c")
+            list(APPEND srcs "src/secure_boot_v2/secure_boot_ecdsa_signature.c")
         endif()
     endif()
 endif()

@@ -1,20 +1,43 @@
 if(CONFIG_BT_ENABLED)
     if(CONFIG_IDF_TARGET_ESP32)
-        set(srcs "controller/esp32/bt.c")
+        set(srcs "controller/esp32/bt.c"
+                 "controller/esp32/hli_api.c"
+                 "controller/esp32/hli_vectors.S")
     elseif(CONFIG_IDF_TARGET_ESP32C3)
         set(srcs "controller/esp32c3/bt.c")
     elseif(CONFIG_IDF_TARGET_ESP32S3)
         set(srcs "controller/esp32s3/bt.c")
+    elseif(CONFIG_IDF_TARGET_ESP32H2)
+        set(srcs "controller/esp32h2/bt.c")
+    endif()
+
+    if(CONFIG_NIMBLE_USE_UART_HCI)
+        set(srcs
+            "porting/nimble/src/hal_uart.c"
+            )
+    else()
     endif()
 
     set(include_dirs common/osi/include)
 
     if(CONFIG_IDF_TARGET_ESP32)
-        list(APPEND include_dirs include/esp32/include)
+       list(APPEND include_dirs include/esp32/include)
     elseif(CONFIG_IDF_TARGET_ESP32C3)
-        list(APPEND include_dirs include/esp32c3/include)
+       list(APPEND include_dirs include/esp32c3/include)
     elseif(CONFIG_IDF_TARGET_ESP32S3)
-        list(APPEND include_dirs include/esp32s3/include)
+       list(APPEND include_dirs include/esp32s3/include)
+    elseif(CONFIG_IDF_TARGET_ESP32H2)
+       if(CONFIG_BT_BLUEDROID_ENABLED)
+           list(APPEND include_dirs
+                host/nimble/nimble/porting/nimble/include
+                host/nimble/nimble/nimble/include
+                host/nimble/nimble/porting/npl/freertos/include
+                host/nimble/nimble/nimble/transport/ram/include
+                host/nimble/port/include
+                include/esp32h2/include)
+       else()
+           list(APPEND include_dirs include/esp32h2/include)
+       endif()
     endif()
 
     list(APPEND priv_include_dirs
@@ -55,6 +78,7 @@ if(CONFIG_BT_ENABLED)
             host/bluedroid/bta/gatt/include
             host/bluedroid/bta/hf_ag/include
             host/bluedroid/bta/hf_client/include
+            host/bluedroid/bta/hd/include
             host/bluedroid/bta/hh/include
             host/bluedroid/bta/jv/include
             host/bluedroid/bta/sdp/include
@@ -66,12 +90,12 @@ if(CONFIG_BT_ENABLED)
             host/bluedroid/external/sbc/plc/include
             host/bluedroid/btc/profile/esp/include
             host/bluedroid/btc/profile/std/a2dp/include
-            host/bluedroid/btc/profile/std/hid/include
             host/bluedroid/btc/profile/std/include
             host/bluedroid/btc/include
             host/bluedroid/stack/btm/include
             host/bluedroid/stack/gap/include
             host/bluedroid/stack/gatt/include
+            host/bluedroid/stack/hid/include
             host/bluedroid/stack/l2cap/include
             host/bluedroid/stack/sdp/include
             host/bluedroid/stack/smp/include
@@ -94,9 +118,13 @@ if(CONFIG_BT_ENABLED)
                    "host/bluedroid/api/esp_gatt_common_api.c"
                    "host/bluedroid/api/esp_gattc_api.c"
                    "host/bluedroid/api/esp_gatts_api.c"
+                   "host/bluedroid/api/esp_hidd_api.c"
+                   "host/bluedroid/api/esp_hidh_api.c"
                    "host/bluedroid/api/esp_hf_ag_api.c"
                    "host/bluedroid/api/esp_hf_client_api.c"
                    "host/bluedroid/api/esp_spp_api.c"
+                   "host/bluedroid/api/esp_sdp_api.c"
+                   "host/bluedroid/api/esp_l2cap_bt_api.c"
                    "host/bluedroid/bta/ar/bta_ar.c"
                    "host/bluedroid/bta/av/bta_av_aact.c"
                    "host/bluedroid/bta/av/bta_av_act.c"
@@ -128,6 +156,9 @@ if(CONFIG_BT_ENABLED)
                    "host/bluedroid/bta/gatt/bta_gatts_co.c"
                    "host/bluedroid/bta/gatt/bta_gatts_main.c"
                    "host/bluedroid/bta/gatt/bta_gatts_utils.c"
+                   "host/bluedroid/bta/hd/bta_hd_api.c"
+                   "host/bluedroid/bta/hd/bta_hd_act.c"
+                   "host/bluedroid/bta/hd/bta_hd_main.c"
                    "host/bluedroid/bta/hh/bta_hh_act.c"
                    "host/bluedroid/bta/hh/bta_hh_api.c"
                    "host/bluedroid/bta/hh/bta_hh_cfg.c"
@@ -184,8 +215,9 @@ if(CONFIG_BT_ENABLED)
                    "host/bluedroid/btc/profile/std/hf_ag/btc_hf_ag.c"
                    "host/bluedroid/btc/profile/std/hf_client/btc_hf_client.c"
                    "host/bluedroid/btc/profile/std/hf_client/bta_hf_client_co.c"
-                   "host/bluedroid/btc/profile/std/hid/hidh_api.c"
-                   "host/bluedroid/btc/profile/std/hid/hidh_conn.c"
+                   "host/bluedroid/btc/profile/std/hid/btc_hd.c"
+                   "host/bluedroid/btc/profile/std/hid/btc_hh.c"
+                   "host/bluedroid/btc/profile/std/hid/bta_hh_co.c"
                    "host/bluedroid/btc/profile/std/gap/btc_gap_ble.c"
                    "host/bluedroid/btc/profile/std/gap/btc_gap_bt.c"
                    "host/bluedroid/btc/profile/std/gap/bta_gap_bt_co.c"
@@ -194,6 +226,8 @@ if(CONFIG_BT_ENABLED)
                    "host/bluedroid/btc/profile/std/gatt/btc_gattc.c"
                    "host/bluedroid/btc/profile/std/gatt/btc_gatts.c"
                    "host/bluedroid/btc/profile/std/spp/btc_spp.c"
+                   "host/bluedroid/btc/profile/std/sdp/btc_sdp.c"
+                   "host/bluedroid/btc/profile/std/l2cap/btc_l2cap.c"
                    "host/bluedroid/device/bdaddr.c"
                    "host/bluedroid/device/controller.c"
                    "host/bluedroid/device/interop.c"
@@ -251,6 +285,10 @@ if(CONFIG_BT_ENABLED)
                    "host/bluedroid/stack/avrc/avrc_pars_tg.c"
                    "host/bluedroid/stack/avrc/avrc_sdp.c"
                    "host/bluedroid/stack/avrc/avrc_utils.c"
+                   "host/bluedroid/stack/hid/hidd_api.c"
+                   "host/bluedroid/stack/hid/hidd_conn.c"
+                   "host/bluedroid/stack/hid/hidh_api.c"
+                   "host/bluedroid/stack/hid/hidh_conn.c"
                    "host/bluedroid/stack/btm/btm_acl.c"
                    "host/bluedroid/stack/btm/btm_ble.c"
                    "host/bluedroid/stack/btm/btm_ble_addr.c"
@@ -323,6 +361,14 @@ if(CONFIG_BT_ENABLED)
                    "host/bluedroid/stack/smp/smp_l2c.c"
                    "host/bluedroid/stack/smp/smp_main.c"
                    "host/bluedroid/stack/smp/smp_utils.c")
+if(CONFIG_IDF_TARGET_ESP32H2)
+       if(CONFIG_BT_BLUEDROID_ENABLED)
+                   list(APPEND srcs
+                   "host/nimble/nimble/porting/npl/freertos/src/npl_os_freertos.c"
+                   "host/nimble/nimble/porting/nimble/src/os_msys_init.c"
+                   "host/nimble/port/src/esp_nimble_mem.c")
+       endif()
+endif()
 
             list(APPEND srcs "common/btc/profile/esp/blufi/bluedroid_host/esp_blufi.c")
         if(CONFIG_BLE_MESH)
@@ -449,6 +495,7 @@ if(CONFIG_BT_ENABLED)
                     host/nimble/nimble/nimble/host/store/ram/include
                     host/nimble/nimble/nimble/host/store/config/include
                     host/nimble/nimble/porting/npl/freertos/include
+                    host/nimble/nimble/nimble/transport/ram/include
                     host/nimble/esp-hci/include)
 
     if(NOT CONFIG_BT_NIMBLE_CRYPTO_STACK_MBEDTLS)
@@ -532,17 +579,34 @@ if(CONFIG_BT_ENABLED)
                     "host/nimble/nimble/nimble/host/store/config/src/ble_store_nvs.c"
                     "host/nimble/nimble/porting/npl/freertos/src/nimble_port_freertos.c"
                     "host/nimble/nimble/porting/npl/freertos/src/npl_os_freertos.c"
-                    "host/nimble/nimble/porting/nimble/src/endian.c"
                     "host/nimble/nimble/porting/nimble/src/os_cputime_pwr2.c"
                     "host/nimble/nimble/porting/nimble/src/hal_timer.c"
-                    "host/nimble/nimble/porting/nimble/src/os_mempool.c"
                     "host/nimble/nimble/porting/nimble/src/os_msys_init.c"
                     "host/nimble/nimble/porting/nimble/src/nimble_port.c"
-                    "host/nimble/nimble/porting/nimble/src/mem.c"
-                    "host/nimble/nimble/porting/nimble/src/os_mbuf.c"
-                    "host/nimble/nimble/porting/nimble/src/os_cputime.c"
+                    "host/nimble/port/src/esp_nimble_mem.c"
                     "host/nimble/esp-hci/src/esp_nimble_hci.c"
-                    "host/nimble/port/src/esp_nimble_mem.c")
+                    "host/nimble/nimble/porting/nimble/src/os_cputime.c")
+
+        if(CONFIG_IDF_TARGET_ESP32)
+            list(APPEND srcs
+                    "host/nimble/nimble/porting/nimble/src/endian.c"
+                    "host/nimble/nimble/porting/nimble/src/os_mempool.c"
+                    "host/nimble/nimble/porting/nimble/src/mem.c"
+                    "host/nimble/nimble/porting/nimble/src/os_mbuf.c")
+        elseif(CONFIG_IDF_TARGET_ESP32C3)
+            list(APPEND srcs
+                    "host/nimble/nimble/porting/nimble/src/endian.c"
+                    "host/nimble/nimble/porting/nimble/src/os_mempool.c"
+                    "host/nimble/nimble/porting/nimble/src/mem.c"
+                    "host/nimble/nimble/porting/nimble/src/os_mbuf.c")
+        elseif(CONFIG_IDF_TARGET_ESP32S3)
+            list(APPEND srcs
+                    "host/nimble/nimble/porting/nimble/src/endian.c"
+                    "host/nimble/nimble/porting/nimble/src/os_mempool.c"
+                    "host/nimble/nimble/porting/nimble/src/mem.c"
+                    "host/nimble/nimble/porting/nimble/src/os_mbuf.c")
+        endif()
+
 
             list(APPEND srcs
                     "common/btc/profile/esp/blufi/nimble_host/esp_blufi.c")
@@ -553,7 +617,8 @@ if(CONFIG_BT_ENABLED)
         if(CONFIG_BT_NIMBLE_MESH)
 
             list(APPEND include_dirs
-                host/nimble/nimble/nimble/host/mesh/include)
+                host/nimble/nimble/nimble/host/mesh/include
+                host/nimble/nimble/nimble/host/include/host)
 
             list(APPEND srcs "host/nimble/nimble/nimble/host/mesh/src/shell.c"
                         "host/nimble/nimble/nimble/host/mesh/src/friend.c"
@@ -567,7 +632,6 @@ if(CONFIG_BT_ENABLED)
                         "host/nimble/nimble/nimble/host/mesh/src/transport.c"
                         "host/nimble/nimble/nimble/host/mesh/src/prov.c"
                         "host/nimble/nimble/nimble/host/mesh/src/mesh.c"
-                        "host/nimble/nimble/nimble/host/mesh/src/nodes.c"
                         "host/nimble/nimble/nimble/host/mesh/src/access.c"
                         "host/nimble/nimble/nimble/host/mesh/src/cfg_srv.c"
                         "host/nimble/nimble/nimble/host/mesh/src/cfg_cli.c"
@@ -577,8 +641,18 @@ if(CONFIG_BT_ENABLED)
                         "host/nimble/nimble/nimble/host/mesh/src/proxy.c"
                         "host/nimble/nimble/nimble/host/mesh/src/health_srv.c"
                         "host/nimble/nimble/nimble/host/mesh/src/testing.c"
+                        "host/nimble/nimble/nimble/host/mesh/src/aes-ccm.c"
+                        "host/nimble/nimble/nimble/host/mesh/src/app_keys.c"
+                        "host/nimble/nimble/nimble/host/mesh/src/cdb.c"
+                        "host/nimble/nimble/nimble/host/mesh/src/cfg.c"
+                        "host/nimble/nimble/nimble/host/mesh/src/pb_adv.c"
+                        "host/nimble/nimble/nimble/host/mesh/src/pb_gatt.c"
+                        "host/nimble/nimble/nimble/host/mesh/src/prov_device.c"
+                        "host/nimble/nimble/nimble/host/mesh/src/provisioner.c"
+                        "host/nimble/nimble/nimble/host/mesh/src/heartbeat.c"
+                        "host/nimble/nimble/nimble/host/mesh/src/rpl.c"
+                        "host/nimble/nimble/nimble/host/mesh/src/subnet.c"
                         "host/nimble/nimble/nimble/host/mesh/src/net.c")
-
         endif()
     endif()
 
@@ -588,8 +662,7 @@ endif()
 idf_component_register(SRCS "${srcs}"
                 INCLUDE_DIRS "${include_dirs}"
                 PRIV_INCLUDE_DIRS "${priv_include_dirs}"
-                REQUIRES nvs_flash soc esp_timer esp_pm esp_phy
-                PRIV_REQUIRES esp_ipc
+                REQUIRES nvs_flash soc esp_timer esp_pm esp_phy mbedtls
                 LDFRAGMENTS "linker.lf")
 
 if(CONFIG_BT_ENABLED)
@@ -597,6 +670,8 @@ if(CONFIG_BT_ENABLED)
     if(CONFIG_IDF_TARGET_ESP32)
         target_link_libraries(${COMPONENT_LIB} INTERFACE "-L${CMAKE_CURRENT_LIST_DIR}/controller/lib_esp32/esp32")
         target_link_libraries(${COMPONENT_LIB} PUBLIC btdm_app)
+
+        target_link_libraries(${COMPONENT_LIB} INTERFACE "-u ld_include_hli_vectors_bt")
     elseif(CONFIG_IDF_TARGET_ESP32C3)
         target_link_libraries(${COMPONENT_LIB} INTERFACE
                 "-L${CMAKE_CURRENT_LIST_DIR}/controller/lib_esp32c3_family/esp32c3")
@@ -605,7 +680,17 @@ if(CONFIG_BT_ENABLED)
         target_link_libraries(${COMPONENT_LIB} INTERFACE
                 "-L${CMAKE_CURRENT_LIST_DIR}/controller/lib_esp32c3_family/esp32s3")
         target_link_libraries(${COMPONENT_LIB} PUBLIC btdm_app)
+    elseif(CONFIG_IDF_TARGET_ESP32H2)
+        add_prebuilt_library(nimblelib "controller/lib_esp32h2/esp32h2-bt-lib/libcontroller_5p0_seq.a")
+        target_link_libraries(${COMPONENT_LIB} PRIVATE nimblelib)
     endif()
+
+    set_source_files_properties(
+        "host/bluedroid/bta/gatt/bta_gattc_act.c"
+        "host/bluedroid/bta/gatt/bta_gattc_cache.c"
+        "host/bluedroid/btc/profile/std/gatt/btc_gatt_util.c"
+        "host/bluedroid/btc/profile/std/gatt/btc_gatts.c"
+        PROPERTIES COMPILE_FLAGS -Wno-address-of-packed-member)
 endif()
 
 if(CONFIG_BT_NIMBLE_MESH)

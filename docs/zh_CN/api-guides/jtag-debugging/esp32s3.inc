@@ -12,7 +12,7 @@
 
 ::
 
-    openocd -f board/esp32s3.cfg
+    openocd -f board/esp32s3-builtin.cfg
 
 .. |run-openocd-device-name| replace:: ESP32-S3
 
@@ -22,21 +22,28 @@
 
 ::
 
-    user-name@computer-name:~/esp/esp-idf$ openocd -f board/esp32s3.cfg
-    Open On-Chip Debugger  v0.10.0-esp32-20200420 (2020-04-20-16:15)
+    user-name@computer-name:~/esp/esp-idf$ openocd -f board/esp32s3-builtin.cfg
+    Open On-Chip Debugger  v0.10.0-esp32-20210902 (2021-10-05-23:44)
     Licensed under GNU GPL v2
     For bug reports, read
-            http://openocd.org/doc/doxygen/bugs.html
-    none separate
-    adapter speed: 20000 kHz
-    force hard breakpoints
-    Info : ftdi: if you experience problems at higher adapter clocks, try the command "ftdi_tdo_sample_edge falling"
-    Info : clock speed 20000 kHz
-    Info : JTAG tap: esp32s3.cpu0 tap/device found: 0x120034e5 (mfg: 0x272 (Tensilica), part: 0x2003, ver: 0x1)
-    Info : esp32s3: Debug controller was reset (pwrstat=0x5F, after clear 0x0F).
-    Info : esp32s3: Core was reset (pwrstat=0x5F, after clear 0x0F).
+      http://openocd.org/doc/doxygen/bugs.html
+    debug_level: 2
 
-.. |run-openocd-cfg-file-err| replace:: ``Can't find board/esp32s3.cfg``
+    Info : only one transport option; autoselect 'jtag'
+    Warn : Transport "jtag" was already selected
+    Info : Listening on port 6666 for tcl connections
+    Info : Listening on port 4444 for telnet connections
+    Info : esp_usb_jtag: Device found. Base speed 40000KHz, div range 1 to 255
+    Info : clock speed 40000 kHz
+    Info : JTAG tap: esp32s3.cpu0 tap/device found: 0x120034e5 (mfg: 0x272 (Tensilica), part: 0x2003, ver: 0x1)
+    Info : JTAG tap: esp32s3.cpu1 tap/device found: 0x120034e5 (mfg: 0x272 (Tensilica), part: 0x2003, ver: 0x1)
+    Info : esp32s3.cpu0: Debug controller was reset.
+    Info : esp32s3.cpu0: Core was reset.
+    Info : esp32s3.cpu1: Debug controller was reset.
+    Info : esp32s3.cpu1: Core was reset.
+    Info : Listening on port 3333 for gdb connections
+
+.. |run-openocd-cfg-file-err| replace:: ``Can't find board/esp32s3-builtin.cfg``
 
 ---
 
@@ -44,7 +51,7 @@
 
 ::
 
-    openocd -f board/esp32s3.cfg -c "program_esp filename.bin 0x10000 verify exit"
+    openocd -f board/esp32s3-builtin.cfg -c "program_esp filename.bin 0x10000 verify exit"
 
 ---
 
@@ -52,7 +59,7 @@
 
 .. code-block:: bash
 
-    src/openocd -f board/esp32s3.cfg
+    src/openocd -f board/esp32s3-builtin.cfg
 
 ---
 
@@ -60,13 +67,13 @@
 
 .. code-block:: batch
 
-    src\openocd -f board/esp32s3.cfg
+    src\openocd -f board/esp32s3-builtin.cfg
 
 ---
 
 .. idf-py-openocd-default-cfg
 
-.. |idf-py-def-cfg| replace:: ``-f board/esp32s3.cfg``
+.. |idf-py-def-cfg| replace:: ``-f board/esp32s3-builtin.cfg``
 
 ---
 
@@ -74,26 +81,28 @@
 
 ::
 
-    openocd -f board/esp32s3.cfg -c "init; halt; esp appimage_offset 0x210000"
+    openocd -f board/esp32s3-builtin.cfg -c "init; halt; esp appimage_offset 0x210000"
 
 ---
 
 .. openocd-cfg-files
 
-.. list-table:: OpenOCD configuration files for ESP32-S3
+.. list-table:: ESP32-S3 相关的 OpenOCD 配置文件
     :widths: 25 75
     :header-rows: 1
 
-    * - Name
-      - Description
-    * - ``board/esp32s3.cfg``
-      - Board configuration file for ESP32-S3, includes target and adapter configuration.
+    * - 名称
+      - 描述
+    * - ``board/esp32s3-builtin.cfg``
+      - ESP32-S3 系列开发板的配置文件，用于通过内置的 USB JTAG 进行调试，包括 ESP32-S3 目标配置和适配器配置。
+    * - ``board/esp32s3-ftdi.cfg``
+      - ESP32-S3 系列开发板的配置文件，用于通过外部连接的基于 FTDI 的探头，如 ESP-Prog，包括 ESP32-S3 目标配置和适配器配置。
     * - ``target/esp32s3.cfg``
-      - ESP32-S3 target configuration file. Can be used together with one of the ``interface/`` configuration files.
-    * - ``interface/ftdi/esp32s3.cfg``
-      - JTAG adapter configuration file for ESP32-S3 board.
+      - ESP32-S3 目标配置文件，可以和某个 ``interface/`` 下的配置文件一同使用
+    * - ``interface/ftdi/esp_usb_jtag.cfg``
+      - 适用于 ESP32-S3 的 JTAG 适配器配置文件。
     * - ``interface/ftdi/esp32_devkitj_v1.cfg``
-      - JTAG adapter configuration file for ESP-Prog boards.
+      - 适用于 ESP-Prog 的 JTAG 适配器配置文件。
 
 ---
 
@@ -105,20 +114,23 @@
 
 .. jtag-pins
 
-.. list-table:: ESP32-S3 pins and JTAG signals
+.. list-table:: ESP32-S3 管脚和 JTAG 接口信号
     :widths: 25 75
     :header-rows: 1
 
-    * - ESP32-S3 Pin
-      - JTAG Signal
-    * - MTDO
+    * - ESP32-S3 管脚
+      - JTAG 信号
+    * - MTDO / GPIO40
       - TDO
-    * - MTDI
+    * - MTDI / GPIO41
       - TDI
-    * - MTCK
+    * - MTCK / GPIO39
       - TCK
-    * - MTMS
+    * - MTMS / GPIO42
       - TMS
+
+.. |jtag-sel-gpio| replace:: GPIO3
+.. |jtag-gpio-list| replace:: GPIO39-GPIO42
 
 ---
 
@@ -126,7 +138,7 @@
 
 ::
 
-    openocd -l openocd_log.txt -d3 -f board/esp32s3.cfg
+    openocd -l openocd_log.txt -d3 -f board/esp32s3-builtin.cfg
 
 ---
 
@@ -134,7 +146,7 @@
 
 ::
 
-    openocd -d3 -f board/esp32s3.cfg 2>&1 | tee openocd.log
+    openocd -d3 -f board/esp32s3-builtin.cfg 2>&1 | tee openocd.log
 
 ---
 
@@ -149,12 +161,12 @@
 .. devkit-defs
 
 .. |devkit-name| replace:: ESP32-S3
-.. |devkit-name-with-link| replace:: :doc:`ESP32-S3  <../../hw-reference/index>`
+.. |devkit-name-with-link| replace:: :doc:`ESP32-S3 <../../hw-reference/index>`
 
 ---
 
 .. devkit-hw-config
 
-* Out of the box, ESP32-S3 doesn't need any additional hardware configuration for JTAG debugging. However if you are experiencing issues, check that switches 2-5 of the "JTAG" DIP switch block are in "ON" position.
+* 开箱即用，ESP32-S3 不需要任何其他硬件配置即可进行 JTAG 调试。 但是，如果遇到问题，请检查 “JTAG” DIP 开关的 2-5 号是否在 “ON” 位置。
 
 ---

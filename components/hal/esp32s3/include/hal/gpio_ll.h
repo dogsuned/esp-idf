@@ -1,16 +1,8 @@
-// Copyright 2015-2020 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /*******************************************************************************
  * NOTICE
@@ -28,6 +20,7 @@
 #include "soc/rtc_io_reg.h"
 #include "soc/usb_serial_jtag_reg.h"
 #include "hal/gpio_types.h"
+#include "soc/gpio_struct.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,8 +29,9 @@ extern "C" {
 // Get GPIO hardware instance with giving gpio num
 #define GPIO_LL_GET_HW(num) (((num) == 0) ? (&GPIO) : NULL)
 
-#define GPIO_LL_PRO_CPU_INTR_ENA      (BIT(0))
-#define GPIO_LL_PRO_CPU_NMI_INTR_ENA  (BIT(1))
+// On ESP32S3, pro cpu and app cpu shares the same interrupt enable bit
+#define GPIO_LL_INTR_ENA      (BIT(0))
+#define GPIO_LL_NMI_INTR_ENA  (BIT(1))
 
 /**
   * @brief Enable pull-up on GPIO.
@@ -104,6 +98,8 @@ static inline void gpio_ll_set_intr_type(gpio_dev_t *hw, gpio_num_t gpio_num, gp
   */
 static inline void gpio_ll_get_intr_status(gpio_dev_t *hw, uint32_t core_id, uint32_t *status)
 {
+    // On ESP32S3, pcpu_int register represents GPIO0-31 interrupt status on both cores
+    (void)core_id;
     *status = hw->pcpu_int;
 }
 
@@ -116,6 +112,8 @@ static inline void gpio_ll_get_intr_status(gpio_dev_t *hw, uint32_t core_id, uin
   */
 static inline void gpio_ll_get_intr_status_high(gpio_dev_t *hw, uint32_t core_id, uint32_t *status)
 {
+    // On ESP32S3, pcpu_int1 register represents GPIO32-48 interrupt status on both cores
+    (void)core_id;
     *status = hw->pcpu_int1.intr;
 }
 
@@ -150,9 +148,8 @@ static inline void gpio_ll_clear_intr_status_high(gpio_dev_t *hw, uint32_t mask)
  */
 static inline void gpio_ll_intr_enable_on_core(gpio_dev_t *hw, uint32_t core_id, gpio_num_t gpio_num)
 {
-    if (core_id == 0) {
-        GPIO.pin[gpio_num].int_ena = GPIO_LL_PRO_CPU_INTR_ENA;     //enable pro cpu intr
-    }
+    (void)core_id;
+    GPIO.pin[gpio_num].int_ena = GPIO_LL_INTR_ENA;     //enable intr
 }
 
 /**
@@ -213,7 +210,7 @@ static inline void gpio_ll_output_disable(gpio_dev_t *hw, gpio_num_t gpio_num)
   * @param hw Peripheral GPIO hardware instance address.
   * @param gpio_num GPIO number
   */
-static inline void gpio_ll_output_enable(gpio_dev_t *hw, gpio_num_t gpio_num)
+static inline __attribute__((always_inline)) void gpio_ll_output_enable(gpio_dev_t *hw, gpio_num_t gpio_num)
 {
     if (gpio_num < 32) {
         hw->enable_w1ts = (0x1 << gpio_num);
@@ -228,7 +225,7 @@ static inline void gpio_ll_output_enable(gpio_dev_t *hw, gpio_num_t gpio_num)
   * @param hw Peripheral GPIO hardware instance address.
   * @param gpio_num GPIO number
   */
-static inline void gpio_ll_od_disable(gpio_dev_t *hw, gpio_num_t gpio_num)
+static inline __attribute__((always_inline)) void gpio_ll_od_disable(gpio_dev_t *hw, gpio_num_t gpio_num)
 {
     hw->pin[gpio_num].pad_driver = 0;
 }
@@ -294,11 +291,9 @@ static inline int gpio_ll_get_level(gpio_dev_t *hw, gpio_num_t gpio_num)
  *
  * @param hw Peripheral GPIO hardware instance address.
  * @param gpio_num GPIO number.
- * @param intr_type GPIO wake-up type. Only GPIO_INTR_LOW_LEVEL or GPIO_INTR_HIGH_LEVEL can be used.
  */
-static inline void gpio_ll_wakeup_enable(gpio_dev_t *hw, gpio_num_t gpio_num, gpio_int_type_t intr_type)
+static inline void gpio_ll_wakeup_enable(gpio_dev_t *hw, gpio_num_t gpio_num)
 {
-    hw->pin[gpio_num].int_type = intr_type;
     hw->pin[gpio_num].wakeup_enable = 0x1;
 }
 
@@ -334,7 +329,7 @@ static inline void gpio_ll_set_drive_capability(gpio_dev_t *hw, gpio_num_t gpio_
   */
 static inline void gpio_ll_get_drive_capability(gpio_dev_t *hw, gpio_num_t gpio_num, gpio_drive_cap_t *strength)
 {
-    *strength = GET_PERI_REG_BITS2(GPIO_PIN_MUX_REG[gpio_num], FUN_DRV_V, FUN_DRV_S);
+    *strength = (gpio_drive_cap_t)GET_PERI_REG_BITS2(GPIO_PIN_MUX_REG[gpio_num], FUN_DRV_V, FUN_DRV_S);
 }
 
 /**
@@ -398,7 +393,7 @@ static inline void gpio_ll_iomux_in(gpio_dev_t *hw, uint32_t gpio, uint32_t sign
  * @param  pin_name Pin name to configure
  * @param  func Function to assign to the pin
  */
-static inline void gpio_ll_iomux_func_sel(uint32_t pin_name, uint32_t func)
+static inline __attribute__((always_inline)) void gpio_ll_iomux_func_sel(uint32_t pin_name, uint32_t func)
 {
     if (pin_name == IO_MUX_GPIO19_REG || pin_name == IO_MUX_GPIO20_REG) {
         CLEAR_PERI_REG_MASK(USB_SERIAL_JTAG_CONF0_REG, USB_SERIAL_JTAG_USB_PAD_ENABLE);
@@ -422,12 +417,20 @@ static inline void gpio_ll_iomux_out(gpio_dev_t *hw, uint8_t gpio_num, int func,
     gpio_ll_iomux_func_sel(GPIO_PIN_MUX_REG[gpio_num], func);
 }
 
-static inline void gpio_ll_force_hold_all(gpio_dev_t *hw)
+/**
+  * @brief Force hold digital and rtc gpio pad.
+  * @note GPIO force hold, whether the chip in sleep mode or wakeup mode.
+  */
+static inline void gpio_ll_force_hold_all(void)
 {
     CLEAR_PERI_REG_MASK(RTC_CNTL_DIG_ISO_REG, RTC_CNTL_DG_PAD_FORCE_UNHOLD);
     SET_PERI_REG_MASK(RTC_CNTL_DIG_ISO_REG, RTC_CNTL_DG_PAD_FORCE_HOLD);
 }
 
+/**
+  * @brief Force unhold digital and rtc gpio pad.
+  * @note GPIO force unhold, whether the chip in sleep mode or wakeup mode.
+  */
 static inline void gpio_ll_force_unhold_all(void)
 {
     CLEAR_PERI_REG_MASK(RTC_CNTL_DIG_ISO_REG, RTC_CNTL_DG_PAD_FORCE_HOLD);

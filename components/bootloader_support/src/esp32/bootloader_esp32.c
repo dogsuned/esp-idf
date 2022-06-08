@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2019-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2019-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -18,7 +18,7 @@
 #include "bootloader_console.h"
 #include "bootloader_flash_priv.h"
 
-#include "soc/cpu.h"
+#include "esp_cpu.h"
 #include "soc/dport_reg.h"
 #include "soc/efuse_reg.h"
 #include "soc/gpio_periph.h"
@@ -32,7 +32,7 @@
 #include "esp_rom_gpio.h"
 #include "esp_rom_efuse.h"
 #include "esp_rom_sys.h"
-#include "esp32/rom/spi_flash.h"
+#include "esp_rom_spiflash.h"
 #include "esp_efuse.h"
 
 static const char *TAG = "boot.esp32";
@@ -126,9 +126,9 @@ static void bootloader_reset_mmu(void)
 static esp_err_t bootloader_check_rated_cpu_clock(void)
 {
     int rated_freq = bootloader_clock_get_rated_freq_mhz();
-    if (rated_freq < CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ) {
+    if (rated_freq < CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ) {
         ESP_LOGE(TAG, "Chip CPU frequency rated for %dMHz, configured for %dMHz. Modify CPU frequency in menuconfig",
-                 rated_freq, CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ);
+                 rated_freq, CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ);
         return ESP_FAIL;
     }
     return ESP_OK;
@@ -175,16 +175,16 @@ static void print_flash_info(const esp_image_header_t *bootloader_hdr)
 
     const char *str;
     switch (bootloader_hdr->spi_speed) {
-    case ESP_IMAGE_SPI_SPEED_40M:
+    case ESP_IMAGE_SPI_SPEED_DIV_2:
         str = "40MHz";
         break;
-    case ESP_IMAGE_SPI_SPEED_26M:
+    case ESP_IMAGE_SPI_SPEED_DIV_3:
         str = "26.7MHz";
         break;
-    case ESP_IMAGE_SPI_SPEED_20M:
+    case ESP_IMAGE_SPI_SPEED_DIV_4:
         str = "20MHz";
         break;
-    case ESP_IMAGE_SPI_SPEED_80M:
+    case ESP_IMAGE_SPI_SPEED_DIV_1:
         str = "80MHz";
         break;
     default:
@@ -252,7 +252,7 @@ static esp_err_t bootloader_init_spi_flash(void)
     }
 #endif
 
-    esp_rom_spiflash_unlock();
+    bootloader_flash_unlock();
 
 #if CONFIG_ESPTOOLPY_FLASHMODE_QIO || CONFIG_ESPTOOLPY_FLASHMODE_QOUT
     bootloader_enable_qio_mode();
@@ -387,6 +387,11 @@ esp_err_t bootloader_init(void)
     bootloader_print_banner();
     // update flash ID
     bootloader_flash_update_id();
+    // Check and run XMC startup flow
+    if ((ret = bootloader_flash_xmc_startup()) != ESP_OK) {
+        ESP_LOGE(TAG, "failed when running XMC startup flow, reboot!");
+        goto err;
+    }
     // read bootloader header
     if ((ret = bootloader_read_bootloader_header()) != ESP_OK) {
         goto err;

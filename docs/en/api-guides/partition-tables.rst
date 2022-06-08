@@ -16,7 +16,7 @@ The simplest way to use the partition table is to open the project configuration
 * "Single factory app, no OTA"
 * "Factory app, two OTA definitions"
 
-In both cases the factory app is flashed at offset 0x10000. If you execute `idf.py partition_table` then it will print a summary of the partition table.
+In both cases the factory app is flashed at offset 0x10000. If you execute `idf.py partition-table` then it will print a summary of the partition table.
 
 Built-in Partition Tables
 -------------------------
@@ -29,7 +29,7 @@ Here is the summary printed for the "Single factory app, no OTA" configuration::
   phy_init, data, phy,     0xf000,  0x1000,
   factory,  app,  factory, 0x10000, 1M,
 
-* At a 0x10000 (64KB) offset in the flash is the app labelled "factory". The bootloader will run this app by default.
+* At a 0x10000 (64 KB) offset in the flash is the app labelled "factory". The bootloader will run this app by default.
 * There are also two data regions defined in the partition table for storing NVS library partition and PHY init data.
 
 Here is the summary printed for the "Factory app, two OTA definitions" configuration::
@@ -88,6 +88,7 @@ The ESP-IDF bootloader ignores any partition types other than ``app`` (0x00) and
 
 SubType
 ~~~~~~~
+{IDF_TARGET_ESP_PHY_REF:default = ":ref:`CONFIG_ESP_PHY_INIT_DATA_IN_PARTITION`", esp32c2 = "(not updated yet)"}
 
 The 8-bit subtype field is specific to a given partition type. ESP-IDF currently only specifies the meaning of the subtype field for ``app`` and ``data`` partition types.
 
@@ -99,7 +100,7 @@ See enum :cpp:type:`esp_partition_subtype_t` for the full list of subtypes defin
 
     - OTA never updates the factory partition.
     - If you want to conserve flash usage in an OTA project, you can remove the factory partition and use ``ota_0`` instead.
-  
+
   - ``ota_0`` (0x10) ... ``ota_15`` (0x1F) are the OTA app slots. When :doc:`OTA <../api-reference/system/ota>` is in use, the OTA data partition configures which app slot the bootloader should boot. When using OTA, an application should have at least two OTA application slots (``ota_0`` & ``ota_1``). Refer to the :doc:`OTA documentation <../api-reference/system/ota>` for more details.
   - ``test`` (0x20) is a reserved subtype for factory test procedures. It will be used as the fallback boot partition if no other valid app partition is found. It is also possible to configure the bootloader to read a GPIO input during each boot, and boot this partition if the GPIO is held low, see :ref:`bootloader_boot_from_test_firmware`.
 
@@ -109,7 +110,7 @@ See enum :cpp:type:`esp_partition_subtype_t` for the full list of subtypes defin
   - ``phy`` (1) is for storing PHY initialisation data. This allows PHY to be configured per-device, instead of in firmware.
 
     - In the default configuration, the phy partition is not used and PHY initialisation data is compiled into the app itself. As such, this partition can be removed from the partition table to save space.
-    - To load PHY data from this partition, open the project configuration menu (``idf.py menuconfig``) and enable :ref:`CONFIG_ESP32_PHY_INIT_DATA_IN_PARTITION` option. You will also need to flash your devices with phy init data as the esp-idf build system does not do this automatically.
+    - To load PHY data from this partition, open the project configuration menu (``idf.py menuconfig``) and enable {IDF_TARGET_ESP_PHY_REF} option. You will also need to flash your devices with phy init data as the esp-idf build system does not do this automatically.
   - ``nvs`` (2) is for the :doc:`Non-Volatile Storage (NVS) API <../api-reference/storage/nvs_flash>`.
 
     - NVS is used to store per-device PHY calibration data (different to initialisation data).
@@ -155,7 +156,7 @@ Generating Binary Partition Table
 
 The partition table which is flashed to the {IDF_TARGET_NAME} is in a binary format, not CSV. The tool :component_file:`partition_table/gen_esp32part.py` is used to convert between CSV and binary formats.
 
-If you configure the partition table CSV name in the project configuration (``idf.py menuconfig``) and then build the project or run ``idf.py partition_table``, this conversion is done as part of the build process.
+If you configure the partition table CSV name in the project configuration (``idf.py menuconfig``) and then build the project or run ``idf.py partition-table``, this conversion is done as part of the build process.
 
 To convert CSV to Binary manually::
 
@@ -165,7 +166,7 @@ To convert binary format back to CSV manually::
 
   python gen_esp32part.py binary_partitions.bin input_partitions.csv
 
-To display the contents of a binary partition table on stdout (this is how the summaries displayed when running ``idf.py partition_table`` are generated::
+To display the contents of a binary partition table on stdout (this is how the summaries displayed when running ``idf.py partition-table`` are generated::
 
   python gen_esp32part.py binary_partitions.bin
 
@@ -176,16 +177,12 @@ The ESP-IDF build system will automatically check if generated binaries fit in t
 
 Currently these checks are performed for the following binaries:
 
-* Bootloader binary must fit in space before partition table (see :ref:`bootloader-size`)
+* Bootloader binary must fit in space before partition table (see :ref:`bootloader-size`).
 * App binary should fit in at least one partition of type "app". If the app binary doesn't fit in any app partition, the build will fail. If it only fits in some of the app partitions, a warning is printed about this.
 
 .. note::
 
    Although the build process will fail if the size check returns an error, the binary files are still generated and can be flashed (although they may not work if they are too large for the available space.)
-
-.. note::
-
-   Build system binary size checks are only performed when using the CMake build system. When using the legacy GNU Make build system, file sizes can be checked manually or an error will be logged during boot.
 
 MD5 checksum
 ~~~~~~~~~~~~
@@ -194,7 +191,7 @@ The binary format of the partition table contains an MD5 checksum computed based
 
 .. only:: esp32
 
-    The MD5 checksum generation can be disabled by the ``--disable-md5sum`` option of ``gen_esp32part.py`` or by the :ref:`CONFIG_PARTITION_TABLE_MD5` option. This is useful for example when one :ref:`uses a bootloader from ESP-IDF before v3.1 <CONFIG_ESP32_COMPATIBLE_PRE_V3_1_BOOTLOADERS>` which cannot process MD5 checksums and the boot fails with the error message ``invalid magic number 0xebeb``.
+    The MD5 checksum generation can be disabled by the ``--disable-md5sum`` option of ``gen_esp32part.py`` or by the :ref:`CONFIG_PARTITION_TABLE_MD5` option. This is useful for example when one :ref:`uses a bootloader from ESP-IDF before v3.1 <CONFIG_APP_COMPATIBLE_PRE_V3_1_BOOTLOADERS>` which cannot process MD5 checksums and the boot fails with the error message ``invalid magic number 0xebeb``.
 
 .. only:: not esp32
 
@@ -204,14 +201,14 @@ The binary format of the partition table contains an MD5 checksum computed based
 Flashing the partition table
 ----------------------------
 
-* ``idf.py partition_table-flash``: will flash the partition table with esptool.py.
+* ``idf.py partition-table-flash``: will flash the partition table with esptool.py.
 * ``idf.py flash``: Will flash everything including the partition table.
 
-A manual flashing command is also printed as part of ``idf.py partition_table`` output.
+A manual flashing command is also printed as part of ``idf.py partition-table`` output.
 
 .. note::
 
-  Note that updating the partition table doesn't erase data that may have been stored according to the old partition table. You can use ``idf.py erase_flash`` (or ``esptool.py erase_flash``) to erase the entire flash contents.
+  Note that updating the partition table doesn't erase data that may have been stored according to the old partition table. You can use ``idf.py erase-flash`` (or ``esptool.py erase_flash``) to erase the entire flash contents.
 
 
 Partition Tool (parttool.py)
@@ -292,7 +289,7 @@ The command-line interface of `parttool.py` has the following structure:
   parttool.py --port "/dev/ttyUSB1" read_partition --partition-type=data --partition-subtype=spiffs --output "spiffs.bin"
 
   # Write to partition 'factory' the contents of a file named 'factory.bin'
-  parttool.py --port "/dev/ttyUSB1" write_partition --partition-name=factory "factory.bin"
+  parttool.py --port "/dev/ttyUSB1" write_partition --partition-name=factory --input "factory.bin"
 
   # Print the size of default boot partition
   parttool.py --port "/dev/ttyUSB1" get_partition_info --partition-boot-default --info size

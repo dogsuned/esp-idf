@@ -53,9 +53,14 @@ menu "SPI Flash driver"
             to flash on ESP32-D2WD; (2) main SPI flash is connected to non-default pins; (3) main
             SPI flash chip is manufactured by ISSI.
 
+    config SPI_FLASH_HAS_ROM_IMPL
+        bool
+        depends on IDF_TARGET_ESP32S3 || IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32C2
+        default y if IDF_TARGET_ESP32S3 || IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32C2
+
     config SPI_FLASH_ROM_IMPL
         bool "Use esp_flash implementation in ROM"
-        depends on IDF_TARGET_ESP32S3 || IDF_TARGET_ESP32C3
+        depends on SPI_FLASH_HAS_ROM_IMPL
         default n
         help
             Enable this flag to use new SPI flash driver functions from ROM instead of ESP-IDF.
@@ -131,6 +136,11 @@ menu "SPI Flash driver"
         help
             This allows to yield the CPUs between erase commands.
             Prevents starvation of other tasks.
+            Please use this configuration together with ``SPI_FLASH_ERASE_YIELD_DURATION_MS`` and
+            ``SPI_FLASH_ERASE_YIELD_TICKS`` after carefully checking flash datasheet to avoid a
+            watchdog timeout.
+            For more information, please check `SPI Flash API` reference documenation
+            under section `OS Function`.
 
     config SPI_FLASH_ERASE_YIELD_DURATION_MS
         int "Duration of erasing to yield CPUs (ms)"
@@ -241,10 +251,30 @@ menu "SPI Flash driver"
 
         config SPI_FLASH_SUPPORT_BOYA_CHIP
             bool "BOYA"
-            depends on !IDF_TARGET_ESP32
+            # ESP32 doens't usually use this chip, default n to save iram.
+            default n if IDF_TARGET_ESP32
             default y
             help
                 Enable this to support auto detection of BOYA chips if chip vendor not directly
+                given by ``chip_drv`` member of the chip struct. This adds support for variant
+                chips, however will extend detecting time.
+
+        config SPI_FLASH_SUPPORT_TH_CHIP
+            bool "TH"
+            # ESP32 doens't usually use this chip, default n to save iram.
+            default n if IDF_TARGET_ESP32
+            default y
+            help
+                Enable this to support auto detection of TH chips if chip vendor not directly
+                given by ``chip_drv`` member of the chip struct. This adds support for variant
+                chips, however will extend detecting time.
+
+        config SPI_FLASH_SUPPORT_MXIC_OPI_CHIP
+            bool "mxic (opi)"
+            depends on IDF_TARGET_ESP32S3
+            default y
+            help
+                Enable this to support auto detection of Octal MXIC chips if chip vendor not directly
                 given by ``chip_drv`` member of the chip struct. This adds support for variant
                 chips, however will extend detecting time.
 

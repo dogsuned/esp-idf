@@ -1,3 +1,5 @@
+idf_build_get_property(target IDF_TARGET)
+
 set(srcs
     "unity/src/unity.c")
 
@@ -5,12 +7,18 @@ set(includes
     "include"
     "unity/src")
 
+set(requires "")
+
 if(CONFIG_UNITY_ENABLE_BACKTRACE_ON_FAIL)
     list(APPEND COMPONENT_PRIV_INCLUDEDIRS "include/priv")
 endif()
 
 if(CONFIG_UNITY_ENABLE_IDF_TEST_RUNNER)
     list(APPEND srcs "unity_runner.c")
+    # Note the following files are not compatible with the Linux target.
+    # On Linux, these are masked because we also don't use the IDF test runner there
+    list(APPEND srcs "unity_utils_freertos.c")
+    list(APPEND requires "freertos")
 endif()
 
 if(CONFIG_UNITY_ENABLE_FIXTURE)
@@ -18,17 +26,20 @@ if(CONFIG_UNITY_ENABLE_FIXTURE)
     list(APPEND includes "unity/extras/fixture/src")
 endif()
 
-if(${IDF_TARGET} STREQUAL "linux")
-    idf_component_get_property(spi_flash_dir spi_flash COMPONENT_DIR)
-    list(APPEND includes "${spi_flash_dir}/sim/stubs/esp_common")
-else()
+list(APPEND srcs "unity_utils_memory.c")
+
+if(NOT "${target}" STREQUAL "linux")
     list(APPEND srcs "unity_port_esp32.c")
+    list(APPEND srcs "port/esp/unity_utils_memory_esp.c")
+else()
+    list(APPEND srcs "port/linux/unity_utils_memory_linux.c")
 endif()
 
 idf_component_register(SRCS "${srcs}"
-                    INCLUDE_DIRS ${includes})
+                    INCLUDE_DIRS ${includes}
+                    REQUIRES ${requires})
 
-if(NOT ${IDF_TARGET} STREQUAL "linux")
+if(NOT "${target}" STREQUAL "linux")
     target_compile_definitions(${COMPONENT_LIB} PUBLIC
         -DUNITY_INCLUDE_CONFIG_H
     )

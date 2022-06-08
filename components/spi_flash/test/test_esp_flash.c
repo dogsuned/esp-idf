@@ -32,6 +32,8 @@
 #include "esp32c3/rom/cache.h"
 #elif CONFIG_IDF_TARGET_ESP32H2
 #include "esp32h2/rom/cache.h"
+#elif CONFIG_IDF_TARGET_ESP32C2
+#include "esp32c2/rom/cache.h"
 #endif
 
 #define FUNC_SPI    1
@@ -39,7 +41,7 @@
 static uint8_t sector_buf[4096];
 
 #define MAX_ADDR_24BIT      0x1000000
-#define TEST_SPI_SPEED      ESP_FLASH_10MHZ
+#define TEST_SPI_SPEED      10
 #define TEST_SPI_READ_MODE  SPI_FLASH_FASTRD
 // #define FORCE_GPIO_MATRIX
 
@@ -86,12 +88,12 @@ static uint8_t sector_buf[4096];
 #define SPI1_HD_IO          27  //the pin which is usually used by the PSRAM hd
 #define SPI1_WP_IO          28  //the pin which is usually used by the PSRAM wp
 
-#define FSPI_PIN_NUM_MOSI   35
-#define FSPI_PIN_NUM_MISO   37
-#define FSPI_PIN_NUM_CLK    36
-#define FSPI_PIN_NUM_HD     33
-#define FSPI_PIN_NUM_WP     38
-#define FSPI_PIN_NUM_CS     34
+#define FSPI_PIN_NUM_MOSI   11
+#define FSPI_PIN_NUM_MISO   13
+#define FSPI_PIN_NUM_CLK    12
+#define FSPI_PIN_NUM_HD     9
+#define FSPI_PIN_NUM_WP     14
+#define FSPI_PIN_NUM_CS     10
 
 // Just use the same pins for HSPI
 #define HSPI_PIN_NUM_MOSI   FSPI_PIN_NUM_MOSI
@@ -101,7 +103,7 @@ static uint8_t sector_buf[4096];
 #define HSPI_PIN_NUM_WP     FSPI_PIN_NUM_WP
 #define HSPI_PIN_NUM_CS     FSPI_PIN_NUM_CS
 
-#elif CONFIG_IDF_TARGET_ESP32C3
+#elif CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C2
 #define SPI1_CS_IO          26  //the pin which is usually used by the PSRAM cs
 #define SPI1_HD_IO          27  //the pin which is usually used by the PSRAM hd
 #define SPI1_WP_IO          28  //the pin which is usually used by the PSRAM wp
@@ -139,14 +141,13 @@ typedef void (*flash_test_func_t)(const esp_partition_t *part);
 
    These tests run for all the flash chip configs shown in config_list, below (internal and external).
  */
-#if defined(CONFIG_SPIRAM) || TEMPORARY_DISABLED_FOR_TARGETS(ESP32S3)
-// No S3 runner
+#if defined(CONFIG_SPIRAM)
 #define FLASH_TEST_CASE_3(STR, FUNCT_TO_RUN)
 #define FLASH_TEST_CASE_3_IGNORE(STR, FUNCT_TO_RUN)
 #else //CONFIG_SPIRAM
 #if !CONFIG_IDF_TARGET_ESP32C3
 #define FLASH_TEST_CASE_3(STR, FUNC_TO_RUN) \
-    TEST_CASE(STR", 3 chips", "[esp_flash_3][test_env=UT_T1_ESP_FLASH]") {flash_test_func(FUNC_TO_RUN, TEST_CONFIG_NUM);}
+    TEST_CASE(STR", 3 chips", "[esp_flash_3][test_env=UT_T1_ESP_FLASH][timeout=35]") {flash_test_func(FUNC_TO_RUN, TEST_CONFIG_NUM);}
 
 #define FLASH_TEST_CASE_3_IGNORE(STR, FUNC_TO_RUN) \
     TEST_CASE(STR", 3 chips", "[esp_flash_3][test_env=UT_T1_ESP_FLASH][ignore]") {flash_test_func(FUNC_TO_RUN, TEST_CONFIG_NUM);}
@@ -159,9 +160,6 @@ typedef void (*flash_test_func_t)(const esp_partition_t *part);
 #endif // !CONFIG_IDF_TARGET_ESP32C3
 #endif //CONFIG_SPIRAM
 
-#define TEST_FLASH_PERFORMANCE_CCOMP_GREATER_THAN(name, value, chip) \
-    printf("[Performance][" PERFORMANCE_STR(name) "]: %d, flash_chip: %s\n", value, chip);\
-    _TEST_PERFORMANCE_ASSERT(value > PERFORMANCE_CON(IDF_PERFORMANCE_MIN_, name));
 
 //currently all the configs are the same with esp_flash_spi_device_config_t, no more information required
 typedef esp_flash_spi_device_config_t flashtest_config_t;
@@ -177,7 +175,7 @@ static const char TAG[] = "test_esp_flash";
     , \
     { \
         .io_mode = TEST_SPI_READ_MODE,\
-        .speed = TEST_SPI_SPEED, \
+        .freq_mhz = TEST_SPI_SPEED, \
         .host_id = SPI1_HOST, \
         .cs_id = 1, \
         /* the pin which is usually used by the PSRAM */ \
@@ -191,7 +189,7 @@ flashtest_config_t config_list[] = {
     /* current runner doesn't have a flash on HSPI */
     // {
     //     .io_mode = TEST_SPI_READ_MODE,
-    //     .speed = TEST_SPI_SPEED,
+    //     .freq_mhz = TEST_SPI_SPEED,
     //     .host_id = HSPI_HOST,
     //     .cs_id = 0,
     //     // uses GPIO matrix on esp32s2 regardless if FORCE_GPIO_MATRIX
@@ -200,7 +198,7 @@ flashtest_config_t config_list[] = {
     // },
     {
         .io_mode = TEST_SPI_READ_MODE,
-        .speed = TEST_SPI_SPEED,
+        .freq_mhz = TEST_SPI_SPEED,
         .host_id = VSPI_HOST,
         .cs_id = 0,
         .cs_io_num = VSPI_PIN_NUM_CS,
@@ -212,7 +210,7 @@ flashtest_config_t config_list[] = {
     FLASHTEST_CONFIG_COMMON,
     {
         .io_mode = TEST_SPI_READ_MODE,
-        .speed = TEST_SPI_SPEED,
+        .freq_mhz = TEST_SPI_SPEED,
         .host_id = FSPI_HOST,
         .cs_id = 0,
         .cs_io_num = FSPI_PIN_NUM_CS,
@@ -220,7 +218,7 @@ flashtest_config_t config_list[] = {
     },
     {
         .io_mode = TEST_SPI_READ_MODE,
-        .speed = TEST_SPI_SPEED,
+        .freq_mhz = TEST_SPI_SPEED,
         .host_id = HSPI_HOST,
         .cs_id = 0,
         // uses GPIO matrix on esp32s2 regardless of FORCE_GPIO_MATRIX
@@ -230,18 +228,21 @@ flashtest_config_t config_list[] = {
 };
 #elif CONFIG_IDF_TARGET_ESP32S3
 flashtest_config_t config_list[] = {
-    FLASHTEST_CONFIG_COMMON,
-    /* No runners for esp32s3 for these config yet */
+    /* No SPI1 CS1 flash on esp32S3 test */
+    {
+        /* no need to init */
+        .host_id = -1,
+    },
     {
         .io_mode = TEST_SPI_READ_MODE,
-        .speed = TEST_SPI_SPEED,
+        .freq_mhz = TEST_SPI_SPEED,
         .host_id = SPI2_HOST,
         .cs_id = 0,
         .cs_io_num = FSPI_PIN_NUM_CS,
         .input_delay_ns = 0,
     },
 };
-#elif CONFIG_IDF_TARGET_ESP32C3
+#elif CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C2
 flashtest_config_t config_list[] = {
     /* No SPI1 CS1 flash on esp32c3 test */
     {
@@ -250,7 +251,7 @@ flashtest_config_t config_list[] = {
     },
     {
         .io_mode = TEST_SPI_READ_MODE,
-        .speed = TEST_SPI_SPEED,
+        .freq_mhz = TEST_SPI_SPEED,
         .host_id = SPI2_HOST,
         .cs_id = 0,
         .cs_io_num = FSPI_PIN_NUM_CS,
@@ -387,7 +388,7 @@ static void setup_new_chip(const flashtest_config_t* test_cfg, esp_flash_t** out
     esp_flash_spi_device_config_t dev_cfg = {
         .host_id = test_cfg->host_id,
         .io_mode = test_cfg->io_mode,
-        .speed = test_cfg->speed,
+        .freq_mhz = test_cfg->freq_mhz,
         .cs_id = test_cfg->cs_id,
         .cs_io_num = test_cfg->cs_io_num,
         .input_delay_ns = test_cfg->input_delay_ns,
@@ -725,6 +726,7 @@ static void write_large_buffer(const esp_partition_t *part, const uint8_t *sourc
 static void read_and_check(const esp_partition_t *part, const uint8_t *source, size_t length);
 
 // Internal functions for testing, from esp_flash_api.c
+#if !CONFIG_ESPTOOLPY_OCT_FLASH
 esp_err_t esp_flash_set_io_mode(esp_flash_t* chip, bool qe);
 esp_err_t esp_flash_get_io_mode(esp_flash_t* chip, bool* qe);
 esp_err_t esp_flash_read_chip_id(esp_flash_t* chip, uint32_t* flash_id);
@@ -799,16 +801,21 @@ IRAM_ATTR NOINLINE_ATTR static void test_toggle_qe(const esp_partition_t* part)
 // `spi_flash_common_set_io_mode` and then run this test.
 FLASH_TEST_CASE_IGNORE("Test esp_flash_write can toggle QE bit", test_toggle_qe);
 FLASH_TEST_CASE_3_IGNORE("Test esp_flash_write can toggle QE bit", test_toggle_qe);
+#endif //CONFIG_ESPTOOLPY_OCT_FLASH
 
+// This table could be chip specific in the future.
+uint8_t flash_frequency_table[6] = {5, 10, 20, 26, 40, 80};
+#define TEST_FLASH_SPEED_MIN 5
 void test_permutations_part(const flashtest_config_t* config, esp_partition_t* part, void* source_buf, size_t length)
 {
+    int clock_index = 0;
     if (config->host_id != -1) {
-        esp_flash_speed_t speed = ESP_FLASH_SPEED_MIN;
-        while (speed != ESP_FLASH_SPEED_MAX) {
+        while (clock_index < sizeof(flash_frequency_table)/sizeof(uint8_t)) {
+            uint8_t speed = flash_frequency_table[clock_index];
             //test io_mode in the inner loop to test QE set/clear function, since
             //the io mode will switch frequently.
             esp_flash_io_mode_t io_mode = SPI_FLASH_READ_MODE_MIN;
-            while (io_mode != SPI_FLASH_READ_MODE_MAX) {
+            while (io_mode != SPI_FLASH_QIO + 1) {
                 if (io_mode > SPI_FLASH_FASTRD &&
                     !SOC_SPI_PERIPH_SUPPORT_MULTILINE_MODE(config->host_id)) {
                     io_mode++;
@@ -818,7 +825,7 @@ void test_permutations_part(const flashtest_config_t* config, esp_partition_t* p
                 esp_flash_t* chip;
                 flashtest_config_t temp_config = *config;
                 temp_config.io_mode = io_mode;
-                temp_config.speed = speed;
+                temp_config.freq_mhz = flash_frequency_table[clock_index];
                 setup_new_chip(&temp_config, &chip);
                 ESP_LOGI(TAG, "test flash io mode: %d, speed: %d", io_mode, speed);
 
@@ -828,7 +835,7 @@ void test_permutations_part(const flashtest_config_t* config, esp_partition_t* p
 
                 io_mode++;
             }
-            speed++;
+            clock_index++;
         }
     } else {
         //test main flash
@@ -844,7 +851,7 @@ void test_permutations_chip(const flashtest_config_t* config)
     flashtest_config_t temp_config = *config;
     // Use the lowest speed to read configs, data and write data to make sure success
     temp_config.io_mode = SPI_FLASH_READ_MODE_MIN;
-    temp_config.speed = ESP_FLASH_SPEED_MIN;
+    temp_config.freq_mhz = TEST_FLASH_SPEED_MIN;
     setup_new_chip(&temp_config, &chip);
 
     //Get size to determine whether to test one extra partition
@@ -904,15 +911,12 @@ TEST_CASE("SPI flash test reading with all speed/mode permutations", "[esp_flash
 }
 
 #ifndef CONFIG_SPIRAM
-#if !TEMPORARY_DISABLED_FOR_TARGETS(ESP32S3)
-// No S3 runner
 TEST_CASE("SPI flash test reading with all speed/mode permutations, 3 chips", "[esp_flash_3][test_env=UT_T1_ESP_FLASH]")
 {
     for (int i = 0; i < TEST_CONFIG_NUM; i++) {
         test_permutations_chip(&config_list[i]);
     }
 }
-#endif// !TEMPORARY_DISABLED_FOR_TARGETS(ESP32S3)
 #endif
 
 
@@ -982,9 +986,6 @@ static void test_write_large_buffer(const esp_partition_t* part, const uint8_t *
 }
 
 #if !CONFIG_SPIRAM
-
-#if !TEMPORARY_DISABLED_FOR_TARGETS(ESP32S3)
-// No S3 runner
 
 typedef struct {
     uint32_t us_start;
@@ -1122,22 +1123,17 @@ static void test_flash_read_write_performance(const esp_partition_t *part)
 
     TEST_ASSERT_EQUAL_HEX8_ARRAY(data_to_write, data_read, total_len);
 
-#if !CONFIG_SPIRAM && !CONFIG_FREERTOS_CHECK_PORT_CRITICAL_COMPLIANCE
-#  define CHECK_DATA(bus, suffix, chip) TEST_FLASH_PERFORMANCE_CCOMP_GREATER_THAN(FLASH_SPEED_BYTE_PER_SEC_##bus##suffix, speed_##suffix, chip)
-#  define CHECK_ERASE(bus, var, chip) TEST_FLASH_PERFORMANCE_CCOMP_GREATER_THAN(FLASH_SPEED_BYTE_PER_SEC_##bus##ERASE, var, chip)
-#else
-#  define CHECK_DATA(bus, suffix, chip) ((void)speed_##suffix);((void)chip)
-#  define CHECK_ERASE(bus, var, chip)   ((void)var);((void)chip)
-#endif
+#define LOG_DATA(bus, suffix, chip) IDF_LOG_PERFORMANCE("FLASH_SPEED_BYTE_PER_SEC_"#bus#suffix, "%d, flash_chip: %s", speed_##suffix, chip)
+#define LOG_ERASE(bus, var, chip) IDF_LOG_PERFORMANCE("FLASH_SPEED_BYTE_PER_SEC_"#bus"ERASE", "%d, flash_chip: %s", var, chip)
 
 // Erase time may vary a lot, can increase threshold if this fails with a reasonable speed
-#define CHECK_PERFORMANCE(bus, chip) do {\
-            CHECK_DATA(bus, WR_4B, chip); \
-            CHECK_DATA(bus, RD_4B, chip); \
-            CHECK_DATA(bus, WR_2KB, chip); \
-            CHECK_DATA(bus, RD_2KB, chip); \
-            CHECK_ERASE(bus, erase_1, chip); \
-            CHECK_ERASE(bus, erase_2, chip); \
+#define LOG_PERFORMANCE(bus, chip) do {\
+            LOG_DATA(bus, WR_4B, chip); \
+            LOG_DATA(bus, RD_4B, chip); \
+            LOG_DATA(bus, WR_2KB, chip); \
+            LOG_DATA(bus, RD_2KB, chip); \
+            LOG_ERASE(bus, erase_1, chip); \
+            LOG_ERASE(bus, erase_2, chip); \
         } while (0)
 
     spi_host_device_t host_id;
@@ -1149,13 +1145,13 @@ static void test_flash_read_write_performance(const esp_partition_t *part)
     get_chip_host(chip, &host_id, &cs_id);
     if (host_id != SPI1_HOST) {
         // Chips on other SPI buses
-        CHECK_PERFORMANCE(EXT_, chip_name);
+        LOG_PERFORMANCE(EXT_, chip_name);
     } else if (cs_id == 0) {
         // Main flash
-        CHECK_PERFORMANCE(,chip_name);
+        LOG_PERFORMANCE(,chip_name);
     } else {
         // Other cs pins on SPI1
-        CHECK_PERFORMANCE(SPI1_, chip_name);
+        LOG_PERFORMANCE(SPI1_, chip_name);
     }
     free(data_to_write);
     free(data_read);
@@ -1164,7 +1160,6 @@ static void test_flash_read_write_performance(const esp_partition_t *part)
 
 
 TEST_CASE("Test esp_flash read/write performance", "[esp_flash][test_env=UT_T1_ESP_FLASH]") {flash_test_func(test_flash_read_write_performance, 1);}
-#endif //!TEMPORARY_DISABLED_FOR_TARGETS(ESP32S3)
 
 #endif // !CONFIG_SPIRAM
 FLASH_TEST_CASE_3("Test esp_flash read/write performance"", 3 chips", test_flash_read_write_performance);

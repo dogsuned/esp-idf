@@ -1,16 +1,5 @@
-# Copyright 2015-2021 Espressif Systems (Shanghai) CO LTD
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+# SPDX-License-Identifier: Apache-2.0
 
 import os
 import re
@@ -18,6 +7,7 @@ import re
 # Control-key characters
 CTRL_A = '\x01'
 CTRL_B = '\x02'
+CTRL_C = '\x03'
 CTRL_F = '\x06'
 CTRL_H = '\x08'
 CTRL_I = '\x09'
@@ -47,10 +37,8 @@ TAG_CMD = 3
 
 __version__ = '1.1'
 
-
 # paths to scripts
 PANIC_OUTPUT_DECODE_SCRIPT = os.path.join(os.path.dirname(__file__), '..', 'gdb_panic_server.py')
-COREDUMP_SCRIPT = os.path.join(os.path.dirname(__file__), '..', '..', 'components', 'espcoredump', 'espcoredump.py')
 
 # regex matches an potential PC value (0x4xxxxxxx)
 MATCH_PCADDR = re.compile(r'0x4[0-9a-f]{7}', re.IGNORECASE)
@@ -71,3 +59,19 @@ PANIC_READING = 1
 # panic handler decoding options
 PANIC_DECODE_DISABLE = 'disable'
 PANIC_DECODE_BACKTRACE = 'backtrace'
+
+EVENT_QUEUE_TIMEOUT = 0.03  # timeout before raising queue.Empty exception in case of empty event queue
+
+ESPPORT_ENVIRON = str('ESPPORT')
+MAKEFLAGS_ENVIRON = 'MAKEFLAGS'
+
+GDB_UART_CONTINUE_COMMAND = '+$c#63'
+GDB_EXIT_TIMEOUT = 0.3  # time delay between exit and writing GDB_UART_CONTINUE_COMMAND
+
+# workaround for data sent without EOL
+# if no data received during the time, last line is considered finished
+LAST_LINE_THREAD_INTERVAL = 0.1
+
+MINIMAL_EN_LOW_DELAY = 0.005
+RECONNECT_DELAY = 0.5  # timeout between reconnect tries
+CHECK_ALIVE_FLAG_TIMEOUT = 0.25  # timeout for checking alive flags (currently used by serial reader)

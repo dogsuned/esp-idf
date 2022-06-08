@@ -1,23 +1,17 @@
-// Copyright 2019 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2019-2022 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include "utils/includes.h"
 #include "utils/common.h"
+#include "utils/eloop.h"
 #include "rsn_supp/wpa.h"
 #include "rsn_supp/wpa_i.h"
 #include "common/eapol_common.h"
 #include "common/ieee802_11_defs.h"
+#include "common/ieee802_11_common.h"
 #include "rsn_supp/wpa_ie.h"
 #include "ap/wpa_auth.h"
 #include "ap/wpa_auth_i.h"
@@ -37,16 +31,25 @@
 #include "esp_wpa2.h"
 #include "esp_common_i.h"
 
+#include "esp_wps.h"
+#include "eap_server/eap.h"
+#include "eapol_auth/eapol_auth_sm.h"
+#include "ap/ieee802_1x.h"
+#include "ap/sta_info.h"
+#include "wps/wps_defs.h"
+
+const wifi_osi_funcs_t *wifi_funcs;
+
 void  wpa_install_key(enum wpa_alg alg, u8 *addr, int key_idx, int set_tx,
-                      u8 *seq, size_t seq_len, u8 *key, size_t key_len, int key_entry_valid)
+                      u8 *seq, size_t seq_len, u8 *key, size_t key_len, enum key_flag key_flag)
 {
-    esp_wifi_set_sta_key_internal(alg, addr, key_idx, set_tx, seq, seq_len, key, key_len, key_entry_valid);
+    esp_wifi_set_sta_key_internal(alg, addr, key_idx, set_tx, seq, seq_len, key, key_len, key_flag);
 }
 
 int  wpa_get_key(uint8_t *ifx, int *alg, u8 *addr, int *key_idx,
-                 u8 *key, size_t key_len, int key_entry_valid)
+                 u8 *key, size_t key_len, enum key_flag key_flag)
 {
-    return esp_wifi_get_sta_key_internal(ifx, alg, addr, key_idx, key, key_len, key_entry_valid);
+    return esp_wifi_get_sta_key_internal(ifx, alg, addr, key_idx, key, key_len, key_flag);
 }
 
 /**
@@ -74,8 +77,10 @@ void  wpa_deauthenticate(u8 reason_code)
     esp_wifi_deauthenticate_internal(reason_code);
 }
 
-int  wpa_config_profile(void)
+int  wpa_config_profile(uint8_t *bssid)
 {
+    int ret = 0;
+
     if (esp_wifi_sta_prof_is_wpa_internal()) {
         wpa_set_profile(WPA_PROTO_WPA, esp_wifi_sta_get_prof_authmode_internal());
     } else if (esp_wifi_sta_prof_is_wpa2_internal() || esp_wifi_sta_prof_is_wpa3_internal()) {
@@ -83,10 +88,10 @@ int  wpa_config_profile(void)
     } else if (esp_wifi_sta_prof_is_wapi_internal()) {
         wpa_set_profile(WPA_PROTO_WAPI, esp_wifi_sta_get_prof_authmode_internal());
     } else {
-        /* do nothing */
-        return -1;
+        ret = -1;
     }
-    return 0;
+
+    return ret;
 }
 
 int wpa_config_bss(uint8_t *bssid)
@@ -123,6 +128,7 @@ bool  wpa_attach(void)
     if(ret) {
         ret = (esp_wifi_register_tx_cb_internal(eapol_txcb, WIFI_TXCB_EAPOL_ID) == ESP_OK);
     }
+    esp_set_scan_ie();
     return ret;
 }
 
@@ -138,16 +144,24 @@ uint8_t  *wpa_ap_get_wpa_ie(uint8_t *ie_len)
     return hapd->wpa_auth->wpa_ie;
 }
 
-bool  wpa_ap_rx_eapol(void *hapd_data, void *sm_data, u8 *data, size_t data_len)
+bool wpa_ap_rx_eapol(void *hapd_data, void *sm_data, u8 *data, size_t data_len)
 {
     struct hostapd_data *hapd = (struct hostapd_data *)hapd_data;
-    struct wpa_state_machine *sm = (struct wpa_state_machine *)sm_data;
-
-    if (!hapd || !sm) {
+    struct sta_info *sta = (struct sta_info *)sm_data;
+    if (!hapd || !sta) {
+        wpa_printf(MSG_DEBUG, "hapd=%p sta=%p", hapd, sta);
         return false;
     }
+#ifdef CONFIG_WPS_REGISTRAR
+    int wps_type = esp_wifi_get_wps_type_internal();
 
-    wpa_receive(hapd->wpa_auth, sm, data, data_len);
+    if ((wps_type == WPS_TYPE_PBC) ||
+	(wps_type == WPS_TYPE_PIN)) {
+	ieee802_1x_receive(hapd, sta->addr, data, data_len);
+        return true;
+    }
+#endif
+    wpa_receive(hapd->wpa_auth, sta->wpa_sm, data, data_len);
 
     return true;
 }
@@ -171,21 +185,25 @@ bool  wpa_deattach(void)
     return true;
 }
 
-void  wpa_sta_connect(uint8_t *bssid)
+int wpa_sta_connect(uint8_t *bssid)
 {
     /* use this API to set AP specific IEs during connection */
     int ret = 0;
-    ret = wpa_config_profile();
+    ret = wpa_config_profile(bssid);
     if (ret == 0) {
         ret = wpa_config_bss(bssid);
-        WPA_ASSERT(ret == 0);
+        if (ret) {
+            wpa_printf(MSG_DEBUG, "Rejecting bss, validation failed");
+            return ret;
+        }
     }
+
+    return 0;
 }
 
 void wpa_config_done(void)
 {
     /* used in future for setting scan and assoc IEs */
-    esp_set_rm_enabled_ie();
 }
 
 int wpa_parse_wpa_ie_wrapper(const u8 *wpa_ie, size_t wpa_ie_len, wifi_wpa_ie_t *data)
@@ -226,13 +244,57 @@ static void wpa_sta_disconnected_cb(uint8_t reason_code)
     }
 }
 
-#ifndef ROAMING_SUPPORT
-static inline void esp_supplicant_common_init(struct wpa_funcs *wpa_cb)
+#ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT
+
+#ifdef CONFIG_WPS_REGISTRAR
+static int check_n_add_wps_sta(struct hostapd_data *hapd, struct sta_info *sta_info, u8 *ies, u8 ies_len, bool *pmf_enable)
 {
-	wpa_cb->wpa_sta_rx_mgmt = NULL;
+    struct wpabuf *wps_ie = ieee802_11_vendor_ie_concat(ies, ies_len, WPS_DEV_OUI_WFA);
+    int wps_type = esp_wifi_get_wps_type_internal();
+
+    /* Condition for this, WPS is running and WPS IEs are part of assoc req */
+    if (!wps_ie || (wps_type == WPS_TYPE_DISABLE)) {
+        return 0;
+    }
+
+    sta_info->wps_ie = wps_ie;
+    sta_info->eapol_sm = ieee802_1x_alloc_eapol_sm(hapd, sta_info);
+
+    if (sta_info->eapol_sm) {
+        wpa_printf(MSG_DEBUG, "considering station " MACSTR " for WPS", MAC2STR(sta_info->addr));
+        return 1;
+    }
+
+    return 0;
 }
-static inline void esp_supplicant_common_deinit(void)
+#endif
+
+static bool hostap_sta_join(void **sm, u8 *bssid, u8 *wpa_ie, u8 wpa_ie_len, bool *pmf_enable)
 {
+    struct sta_info *sta_info;
+    struct hostapd_data *hapd = hostapd_get_hapd_data();
+
+    if (!hapd) {
+        return 0;
+    }
+    sta_info = ap_sta_add(hapd, bssid);
+    if (!sta_info) {
+        wpa_printf(MSG_ERROR, "failed to add station " MACSTR, MAC2STR(bssid));
+	return 0;
+    }
+#ifdef CONFIG_WPS_REGISTRAR
+    if (check_n_add_wps_sta(hapd, sta_info, wpa_ie, wpa_ie_len, pmf_enable)) {
+        *sm = sta_info;
+        return true;
+    }
+#endif
+    if (wpa_ap_join(sm, bssid, wpa_ie, wpa_ie_len, pmf_enable)) {
+        sta_info->wpa_sm = *sm;
+        *sm = sta_info;
+        return true;
+    }
+
+    return false;
 }
 #endif
 
@@ -241,7 +303,11 @@ int esp_supplicant_init(void)
     int ret = ESP_OK;
     struct wpa_funcs *wpa_cb;
 
-    wpa_cb = (struct wpa_funcs *)os_malloc(sizeof(struct wpa_funcs));
+    wifi_funcs = WIFI_OSI_FUNCS_INITIALIZER();
+    if (!wifi_funcs) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    wpa_cb = (struct wpa_funcs *)os_zalloc(sizeof(struct wpa_funcs));
     if (!wpa_cb) {
         return ESP_ERR_NO_MEM;
     }
@@ -253,13 +319,15 @@ int esp_supplicant_init(void)
     wpa_cb->wpa_sta_disconnected_cb = wpa_sta_disconnected_cb;
     wpa_cb->wpa_sta_in_4way_handshake = wpa_sta_in_4way_handshake;
 
-    wpa_cb->wpa_ap_join       = wpa_ap_join;
+#ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT
+    wpa_cb->wpa_ap_join       = hostap_sta_join;
     wpa_cb->wpa_ap_remove     = wpa_ap_remove;
     wpa_cb->wpa_ap_get_wpa_ie = wpa_ap_get_wpa_ie;
     wpa_cb->wpa_ap_rx_eapol   = wpa_ap_rx_eapol;
     wpa_cb->wpa_ap_get_peer_spp_msg  = wpa_ap_get_peer_spp_msg;
     wpa_cb->wpa_ap_init       = hostap_init;
     wpa_cb->wpa_ap_deinit     = hostap_deinit;
+#endif
 
     wpa_cb->wpa_config_parse_string  = wpa_config_parse_string;
     wpa_cb->wpa_parse_wpa_ie  = wpa_parse_wpa_ie_wrapper;
@@ -268,7 +336,12 @@ int esp_supplicant_init(void)
     wpa_cb->wpa_config_done = wpa_config_done;
 
     esp_wifi_register_wpa3_cb(wpa_cb);
-    esp_supplicant_common_init(wpa_cb);
+    eloop_init();
+    ret = esp_supplicant_common_init(wpa_cb);
+
+    if (ret != 0) {
+        return ret;
+    }
 
     esp_wifi_register_wpa_cb_internal(wpa_cb);
 
@@ -282,5 +355,6 @@ int esp_supplicant_init(void)
 int esp_supplicant_deinit(void)
 {
     esp_supplicant_common_deinit();
+    eloop_destroy();
     return esp_wifi_unregister_wpa_cb_internal();
 }

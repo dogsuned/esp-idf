@@ -1,16 +1,8 @@
-// Copyright 2015-2020 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @file cache_err_int.c
@@ -23,14 +15,16 @@
 #include <stdint.h>
 #include "sdkconfig.h"
 #include "esp_err.h"
+#include "esp_log.h"
 #include "esp_attr.h"
 #include "esp_intr_alloc.h"
 #include "soc/soc.h"
-#include "soc/extmem_reg.h"
 #include "soc/periph_defs.h"
 #include "hal/cpu_hal.h"
-#include "esp32s3/dport_access.h"
-#include "esp32s3/rom/ets_sys.h"
+#include "esp_rom_sys.h"
+#include "hal/cache_ll.h"
+
+static const char *TAG = "CACHE_ERR";
 
 void esp_cache_err_int_init(void)
 {
@@ -40,7 +34,7 @@ void esp_cache_err_int_init(void)
     // We do not register a handler for the interrupt because it is interrupt
     // level 4 which is not serviceable from C. Instead, xtensa_vectors.S has
     // a call to the panic handler for this interrupt.
-    intr_matrix_set(core_id, ETS_CACHE_IA_INTR_SOURCE, ETS_CACHEERR_INUM);
+    esp_rom_route_intr_matrix(core_id, ETS_CACHE_IA_INTR_SOURCE, ETS_CACHEERR_INUM);
 
     // Enable invalid cache access interrupt when the cache is disabled.
     // When the interrupt happens, we can not determine the CPU where the
@@ -50,26 +44,41 @@ void esp_cache_err_int_init(void)
     // For this reason, panic handler backtrace will not be correct if the
     // interrupt is connected to PRO CPU and invalid access happens on the APP CPU.
 
-    SET_PERI_REG_MASK(EXTMEM_CACHE_ILG_INT_CLR_REG,
-                      EXTMEM_MMU_ENTRY_FAULT_INT_CLR |
-                      EXTMEM_DCACHE_WRITE_FLASH_INT_CLR |
-                      EXTMEM_DCACHE_PRELOAD_OP_FAULT_INT_CLR |
-                      EXTMEM_DCACHE_SYNC_OP_FAULT_INT_CLR |
-                      EXTMEM_ICACHE_PRELOAD_OP_FAULT_INT_CLR |
-                      EXTMEM_ICACHE_SYNC_OP_FAULT_INT_CLR);
-    SET_PERI_REG_MASK(EXTMEM_CACHE_ILG_INT_ENA_REG,
-                      EXTMEM_MMU_ENTRY_FAULT_INT_ENA |
-                      EXTMEM_DCACHE_WRITE_FLASH_INT_ENA |
-                      EXTMEM_DCACHE_PRELOAD_OP_FAULT_INT_ENA |
-                      EXTMEM_DCACHE_SYNC_OP_FAULT_INT_ENA |
-                      EXTMEM_ICACHE_PRELOAD_OP_FAULT_INT_ENA |
-                      EXTMEM_ICACHE_SYNC_OP_FAULT_INT_ENA);
+    ESP_DRAM_LOGV(TAG, "illegal error intr clr & ena mask is: 0x%x", CACHE_LL_L1_ILG_EVENT_MASK);
+    //illegal error intr doesn't depend on cache_id
+    cache_ll_l1_clear_illegal_error_intr(0, CACHE_LL_L1_ILG_EVENT_MASK);
+    cache_ll_l1_enable_illegal_error_intr(0, CACHE_LL_L1_ILG_EVENT_MASK);
+
+    if (core_id == PRO_CPU_NUM) {
+        esp_rom_route_intr_matrix(core_id, ETS_CACHE_CORE0_ACS_INTR_SOURCE, ETS_CACHEERR_INUM);
+
+        /* On the hardware side, stat by clearing all the bits reponsible for
+         * enabling cache access error interrupts.  */
+        ESP_DRAM_LOGV(TAG, "core 0 access error intr clr & ena mask is: 0x%x", CACHE_LL_L1_ACCESS_EVENT_MASK);
+        cache_ll_l1_clear_access_error_intr(0, CACHE_LL_L1_ACCESS_EVENT_MASK);
+        cache_ll_l1_enable_access_error_intr(0, CACHE_LL_L1_ACCESS_EVENT_MASK);
+    } else {
+        esp_rom_route_intr_matrix(core_id, ETS_CACHE_CORE1_ACS_INTR_SOURCE, ETS_CACHEERR_INUM);
+
+        /* On the hardware side, stat by clearing all the bits reponsible for
+         * enabling cache access error interrupts.  */
+        ESP_DRAM_LOGV(TAG, "core 1 access error intr clr & ena mask is: 0x%x", CACHE_LL_L1_ACCESS_EVENT_MASK);
+        cache_ll_l1_clear_access_error_intr(1, CACHE_LL_L1_ACCESS_EVENT_MASK);
+        cache_ll_l1_enable_access_error_intr(1, CACHE_LL_L1_ACCESS_EVENT_MASK);
+    }
 
     ESP_INTR_ENABLE(ETS_CACHEERR_INUM);
 }
 
 int IRAM_ATTR esp_cache_err_get_cpuid(void)
 {
-    // FIXME
+    if (cache_ll_l1_get_access_error_intr_status(0, CACHE_LL_L1_ACCESS_EVENT_MASK)) {
+        return PRO_CPU_NUM;
+    }
+
+    if (cache_ll_l1_get_access_error_intr_status(1, CACHE_LL_L1_ACCESS_EVENT_MASK)) {
+        return APP_CPU_NUM;
+    }
+
     return -1;
 }

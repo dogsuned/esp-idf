@@ -58,7 +58,7 @@ OpenOCD 支持的编译时的选项
 
 ESP-IDF 有一些针对 OpenOCD 调试功能的选项可以在编译时进行设置：
 
-* :ref:`CONFIG_{IDF_TARGET_CFG_PREFIX}_DEBUG_OCDAWARE` 默认会被使能。如果程序抛出了不可修复或者未处理的异常，并且此时已经连接上了 JTAG 调试器（即 OpenOCD 正在运行），那么 ESP-IDF 将会进入调试器工作模式。
+* :ref:`CONFIG_ESP_DEBUG_OCDAWARE` 默认会被使能。如果程序抛出了不可修复或者未处理的异常，并且此时已经连接上了 JTAG 调试器（即 OpenOCD 正在运行），那么 ESP-IDF 将会进入调试器工作模式。
 
 * :ref:`CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK` 默认没有使能。在所有任务堆栈的末尾设置观察点，从 1 号开始索引。这是调试任务堆栈溢出的最准确的方式。
 
@@ -285,4 +285,4 @@ Kconfig 配置项 :ref:`CONFIG_SECURE_BOOT_ALLOW_JTAG` 可以改变这个默认�
 4.  请将 ``openocd_log.txt`` 和 ``gdb_log.txt`` 文件附在你的问题报告中。
 
 
-.. _OpenOCD 参考手册: http://openocd.org/doc/html/index.html
+.. _OpenOCD 参考手册: https://openocd.org/doc/html/index.html

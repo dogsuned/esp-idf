@@ -43,11 +43,11 @@ const char test_message[] = "This is an example string, if you can read this, th
  */
 static void connect_uarts(void)
 {
-    esp_rom_gpio_connect_out_signal(DEFAULT_UART_RX_PIN, uart_periph_signal[1].tx_sig, false, false);
-    esp_rom_gpio_connect_in_signal(DEFAULT_UART_RX_PIN, uart_periph_signal[0].rx_sig, false);
+    esp_rom_gpio_connect_out_signal(DEFAULT_UART_RX_PIN, UART_PERIPH_SIGNAL(1, SOC_UART_TX_PIN_IDX), false, false);
+    esp_rom_gpio_connect_in_signal(DEFAULT_UART_RX_PIN, UART_PERIPH_SIGNAL(0, SOC_UART_RX_PIN_IDX), false);
 
-    esp_rom_gpio_connect_out_signal(DEFAULT_UART_TX_PIN, uart_periph_signal[0].tx_sig, false, false);
-    esp_rom_gpio_connect_in_signal(DEFAULT_UART_TX_PIN, uart_periph_signal[1].rx_sig, false);
+    esp_rom_gpio_connect_out_signal(DEFAULT_UART_TX_PIN, UART_PERIPH_SIGNAL(0, SOC_UART_TX_PIN_IDX), false, false);
+    esp_rom_gpio_connect_in_signal(DEFAULT_UART_TX_PIN, UART_PERIPH_SIGNAL(1, SOC_UART_RX_PIN_IDX), false);
 }
 
 /**
@@ -58,8 +58,8 @@ static void connect_uarts(void)
  */
 static void disconnect_uarts(void)
 {
-    esp_rom_gpio_connect_out_signal(CONSOLE_UART_TX_PIN, uart_periph_signal[1].tx_sig, false, false);
-    esp_rom_gpio_connect_in_signal(CONSOLE_UART_RX_PIN, uart_periph_signal[1].rx_sig, false);
+    esp_rom_gpio_connect_out_signal(CONSOLE_UART_TX_PIN, UART_PERIPH_SIGNAL(1, SOC_UART_TX_PIN_IDX), false, false);
+    esp_rom_gpio_connect_in_signal(CONSOLE_UART_RX_PIN, UART_PERIPH_SIGNAL(1, SOC_UART_RX_PIN_IDX), false);
 }
 
 /**
@@ -76,7 +76,7 @@ static void configure_uarts(void)
         .parity    = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,
+        .source_clk = UART_SCLK_DEFAULT,
     };
 
     ESP_ERROR_CHECK(uart_driver_install(DEFAULT_UART_CHANNEL, READ_BUF_SIZE * 2, 0, 0, NULL, 0));
@@ -112,7 +112,7 @@ static void send_commands(void* arg) {
 
     /* Discard the first messages sent by the console. */
     do {
-        len = uart_read_bytes(DEFAULT_UART_CHANNEL, data, READ_BUF_SIZE, 100 / portTICK_RATE_MS);
+        len = uart_read_bytes(DEFAULT_UART_CHANNEL, data, READ_BUF_SIZE, 100 / portTICK_PERIOD_MS);
     } while (len == 0);
 
     if ( len == -1 ) {
@@ -126,7 +126,7 @@ static void send_commands(void* arg) {
 
     /* Get the answer back from the console, give it some delay. */
     do {
-        len = uart_read_bytes(DEFAULT_UART_CHANNEL, data, READ_BUF_SIZE - 1, 250 / portTICK_RATE_MS);
+        len = uart_read_bytes(DEFAULT_UART_CHANNEL, data, READ_BUF_SIZE - 1, 250 / portTICK_PERIOD_MS);
     } while (len == 0);
 
     if ( len == -1 ) {

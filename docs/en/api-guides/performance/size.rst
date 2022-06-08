@@ -98,7 +98,6 @@ The summary output provided by ``idf.py size`` does not give enough detail to fi
              libesp_system.a        245    206       0   3078        0       5990     3817   13336
                 libesp-tls.a          0      4       0      0        0       5637     3524    9165
     [... removed some lines here ...]
-          libtcpip_adapter.a          0     17       0      0        0        216        0     233
                 libesp_rom.a          0      0       0    112        0          0        0     112
                     libcxx.a          0      0       0      0        0         47        0      47
                        (exe)          0      0       0      3        0          3       12      18
@@ -298,6 +297,7 @@ The following configuration options will reduce the final binary size of almost 
     - Don't enable :ref:`CONFIG_COMPILER_CXX_EXCEPTIONS`, :ref:`CONFIG_COMPILER_CXX_RTTI`, or set the :ref:`CONFIG_COMPILER_STACK_CHECK_MODE` to Overall. All of these options are already disabled by default, but they have a large impact on binary size.
     - Disabling :ref:`CONFIG_ESP_ERR_TO_NAME_LOOKUP` will remove the lookup table to translate user-friendly names for error values (see :doc:`/api-guides/error-handling`) in error logs, etc. This saves some binary size, but error values will be printed as integers only.
     - Setting :ref:`CONFIG_ESP_SYSTEM_PANIC` to "Silent reboot" will save a small amount of binary size, however this is *only* recommended if no one will use UART output to debug the device.
+    :CONFIG_IDF_TARGET_ARCH_RISCV: - Set :ref:`CONFIG_COMPILER_SAVE_RESTORE_LIBCALLS` to reduce binary size by replacing inlined prologues/epilogues with library calls.
 
 .. note::
 
@@ -314,6 +314,7 @@ Wi-Fi
 @@@@@
 
 - Disabling :ref:`CONFIG_ESP32_WIFI_ENABLE_WPA3_SAE` will save some Wi-Fi binary size if WPA3 support is not needed. (Note that WPA3 is mandatory for new Wi-Fi device certifications.)
+- Disabling :ref:`CONFIG_ESP_WIFI_SOFTAP_SUPPORT` will save some Wi-Fi binary size if soft-AP support is not needed.
 
 .. only:: esp32
 
@@ -362,6 +363,8 @@ Enabling Nano formatting also reduces the stack usage of each function that call
 
 .. _Newlib README file: https://sourceware.org/newlib/README
 
+.. _minimizing_binary_mbedtls:
+
 mbedTLS features
 @@@@@@@@@@@@@@@@
 
@@ -372,16 +375,15 @@ These include:
 - :ref:`CONFIG_MBEDTLS_HAVE_TIME`
 - :ref:`CONFIG_MBEDTLS_ECDSA_DETERMINISTIC`
 - :ref:`CONFIG_MBEDTLS_SHA512_C`
-- :ref:`CONFIG_MBEDTLS_SSL_PROTO_TLS1`
-- :ref:`CONFIG_MBEDTLS_SSL_PROTO_TLS1_1`
 - :ref:`CONFIG_MBEDTLS_CLIENT_SSL_SESSION_TICKETS`
 - :ref:`CONFIG_MBEDTLS_SERVER_SSL_SESSION_TICKETS`
+- :ref:`CONFIG_MBEDTLS_SSL_CONTEXT_SERIALIZATION`
 - :ref:`CONFIG_MBEDTLS_SSL_ALPN`
+- :ref:`CONFIG_MBEDTLS_SSL_RENEGOTIATION`
 - :ref:`CONFIG_MBEDTLS_CCM_C`
 - :ref:`CONFIG_MBEDTLS_GCM_C`
 - :ref:`CONFIG_MBEDTLS_ECP_C` (Alternatively: Leave this option enabled but disable some of the elliptic curves listed in the sub-menu.)
-- :ref:`CONFIG_MBEDTLS_SSL_RENEGOTIATION`
-- Change :ref:`CONFIG_MBEDTLS_TLS_MODE` if both Server & Client are not needed
+- Change :ref:`CONFIG_MBEDTLS_TLS_MODE` if both server & client functionalities are not needed
 - Consider disabling some ciphersuites listed in the "TLS Key Exchange Methods" sub-menu (i.e. :ref:`CONFIG_MBEDTLS_KEY_EXCHANGE_RSA`)
 
 The help text for each option has some more information.
@@ -399,10 +401,34 @@ The help text for each option has some more information.
 
    Not every combination of mbedTLS compile-time config is tested in ESP-IDF. If you find a combination that fails to compile or function as expected, please report the details on GitHub.
 
-FreeModBus
-@@@@@@@@@@
+VFS
+@@@
 
-If using Modbus, enable or disable :ref:`CONFIG_FMB_COMM_MODE_TCP_EN`, :ref:`CONFIG_FMB_COMM_MODE_RTU_EN`, :ref:`CONFIG_FMB_COMM_MODE_ASCII_EN` as applicable for the necessary functionality.
+:doc:`Virtual filesystem </api-reference/storage/vfs>` feature in ESP-IDF allows multiple filesystem drivers and file-like peripheral drivers to be accessed using standard I/O functions (``open``, ``read``, ``write``, etc.) and C library functions (``fopen``, ``fread``, ``fwrite``, etc.). When filesystem or file-like peripheral driver functionality is not used in the application this feature can be fully or partially disabled. VFS component provides the following configuration options:
+
+* :ref:`CONFIG_VFS_SUPPORT_TERMIOS` — can be disabled if the application doesn't use ``termios`` family of functions. Currently, these functions are implemented only for UART VFS driver. Most applications can disable this option. Disabling this option reduces the code size by about 1.8 kB.
+* :ref:`CONFIG_VFS_SUPPORT_SELECT` — can be disabled if the application doesn't use ``select`` function with file descriptors. Currently, only the UART and eventfd VFS drivers implement ``select`` support. Note that when this option is disabled, ``select`` can still be used for socket file descriptors. Disabling this option reduces the code size by about 2.7 kB.
+* :ref:`CONFIG_VFS_SUPPORT_DIR` — can be disabled if the application doesn't use directory related functions, such as ``readdir`` (see the description of this option for the complete list). Applications which only open, read and write specific files and don't need to enumerate or create directories can disable this option, reducing the code size by 0.5 kB or more, depending on the filesystem drivers in use.
+* :ref:`CONFIG_VFS_SUPPORT_IO` — can be disabled if the application doesn't use filesystems or file-like peripheral drivers. This disables all VFS functionality, including the three options mentioned above. When this option is disabled, :doc:`console </api-reference/system/console>` can't be used. Note that the application can still use standard I/O functions with socket file descriptors when this option is disabled. Compared to the default configuration, disabling this option reduces code size by about 9.4 kB.
+
+.. only:: esp32c2
+
+    HAL
+    @@@
+
+    .. list::
+
+        :CONFIG_ESP_ROM_HAS_HAL_SYSTIMER: * Enabling :ref:`CONFIG_HAL_SYSTIMER_USE_ROM_IMPL` can reduce the IRAM usage and binary size by linking in the systimer HAL driver of ROM implementation.
+        :CONFIG_ESP_ROM_HAS_HAL_WDT: * Enabling :ref:`CONFIG_HAL_WDT_USE_ROM_IMPL` can reduce the IRAM usage and binary size by linking in the watchdog HAL driver of ROM implementation.
+
+.. only:: esp32c2
+
+    Heap
+    @@@@
+
+    .. list::
+
+        :CONFIG_ESP_ROM_HAS_HEAP_TLSF: * Enabling :ref:`CONFIG_HEAP_TLSF_USE_ROM_IMPL` can reduce the IRAM usage and binary size by linking in the TLSF library of ROM implementation.
 
 Bootloader Size
 ---------------

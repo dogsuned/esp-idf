@@ -27,7 +27,6 @@
     ADC2_MODE3_D1 (BLOCK2)                   ADC2 calibration 16                                = -4 R/W (0b100001)
 
     Config fuses:
-    DIS_RTC_RAM_BOOT (BLOCK0)                Disables boot from RTC RAM                         = False R/W (0b0)
     DIS_ICACHE (BLOCK0)                      Disables ICache                                    = False R/W (0b0)
     DIS_DCACHE (BLOCK0)                      Disables DCache                                    = False R/W (0b0)
     DIS_DOWNLOAD_ICACHE (BLOCK0)             Disables Icache when SoC is in Download mode       = False R/W (0b0)
@@ -39,9 +38,9 @@
     FLASH_TPUW (BLOCK0)                      Configures flash startup delay after SoC power-up, = 0 R/W (0x0)
                                             unit is (ms/2). When the value is 15, delay is 7.
                                             5 ms                                              
-    DIS_LEGACY_SPI_BOOT (BLOCK0)             Disables Legacy SPI boot mode                      = False R/W (0b0)
-    UART_PRINT_CHANNEL (BLOCK0)              Selects the default UART for printing boot msg     = UART0 R/W (0b0)
-    DIS_USB_DOWNLOAD_MODE (BLOCK0)           Disables use of USB in UART download boot mode     = False R/W (0b0)
+    DIS_DIRECT_BOOT (BLOCK0)                 Disables direct boot mode                          = False R/W (0b0)
+    DIS_USB_SERIAL_JTAG_ROM_PRINT (BLOCK0)       Selects the default UART for printing boot msg     = UART0 R/W (0b0)
+    DIS_USB_SERIAL_JTAG_DOWNLOAD_MODE (BLOCK0) Disables download through USB-Serial-JTAG        = False R/W (0b0)
     UART_PRINT_CONTROL (BLOCK0)              Sets the default UART boot message output mode     = Enabled R/W (0b00)
     FLASH_TYPE (BLOCK0)                      Selects SPI flash type                             = 4 data lines R/W (0b0)
     FORCE_SEND_RESUME (BLOCK0)               Forces ROM code to send an SPI flash resume comman = False R/W (0b0)
@@ -66,6 +65,8 @@
     OPTIONAL_UNIQUE_ID (BLOCK2)(0 errors):   Optional unique 128-bit ID                        
     = 7d 33 b8 bb 0b 13 b3 c8 71 37 0e e8 7c ab d5 92 R/W 
     BLOCK2_VERSION (BLOCK2)                  Version of BLOCK2                                  = With calibration R/W (0b001)
+    CUSTOM_MAC (BLOCK3)                      Custom MAC Address                                
+    = 00:00:00:00:00:00 (OK) R/W 
 
     Security fuses:
     SOFT_DIS_JTAG (BLOCK0)                   Software disables JTAG. When software disabled, JT = False R/W (0b000)

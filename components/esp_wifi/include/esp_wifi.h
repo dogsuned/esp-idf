@@ -1,16 +1,8 @@
-// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 
 /*               Notes about WiFi Programming
@@ -42,7 +34,7 @@
  *
  * The event task is a daemon task, which receives events from WiFi driver or from other subsystem, such
  * as TCPIP stack, event task will call the default callback function on receiving the event. For example,
- * on receiving event SYSTEM_EVENT_STA_CONNECTED, it will call tcpip_adapter_start() to start the DHCP
+ * on receiving event WIFI_EVENT_STA_CONNECTED, it will call esp_netif API to start the DHCP
  * client in it's default handler.
  *
  * Application can register it's own event callback function by API esp_event_init, then the application callback
@@ -95,7 +87,6 @@ extern "C" {
  * @brief WiFi stack configuration parameters passed to esp_wifi_init call.
  */
 typedef struct {
-    system_event_handler_t event_handler;          /**< WiFi event handler */
     wifi_osi_funcs_t*      osi_funcs;              /**< WiFi OS functions */
     wpa_crypto_funcs_t     wpa_crypto_funcs;       /**< WiFi station crypto functions when connect */
     int                    static_rx_buf_num;      /**< WiFi static RX buffer number */
@@ -214,7 +205,6 @@ extern uint64_t g_wifi_feature_caps;
 #define CONFIG_FEATURE_FTM_RESPONDER_BIT (1<<3)
 
 #define WIFI_INIT_CONFIG_DEFAULT() { \
-    .event_handler = &esp_event_send_internal, \
     .osi_funcs = &g_wifi_osi_funcs, \
     .wpa_crypto_funcs = g_wifi_default_wpa_crypto_funcs, \
     .static_rx_buf_num = CONFIG_ESP32_WIFI_STATIC_RX_BUFFER_NUM,\
@@ -236,21 +226,21 @@ extern uint64_t g_wifi_feature_caps;
     .feature_caps = g_wifi_feature_caps, \
     .sta_disconnected_pm = WIFI_STA_DISCONNECTED_PM_ENABLED,  \
     .magic = WIFI_INIT_CONFIG_MAGIC\
-};
+}
 
 /**
-  * @brief  Init WiFi
-  *         Alloc resource for WiFi driver, such as WiFi control structure, RX/TX buffer,
-  *         WiFi NVS structure etc, this WiFi also start WiFi task
+  * @brief  Initialize WiFi
+  *         Allocate resource for WiFi driver, such as WiFi control structure, RX/TX buffer,
+  *         WiFi NVS structure etc. This WiFi also starts WiFi task
   *
   * @attention 1. This API must be called before all other WiFi API can be called
-  * @attention 2. Always use WIFI_INIT_CONFIG_DEFAULT macro to init the config to default values, this can
-  *               guarantee all the fields got correct value when more fields are added into wifi_init_config_t
-  *               in future release. If you want to set your owner initial values, overwrite the default values
-  *               which are set by WIFI_INIT_CONFIG_DEFAULT, please be notified that the field 'magic' of
+  * @attention 2. Always use WIFI_INIT_CONFIG_DEFAULT macro to initialize the configuration to default values, this can
+  *               guarantee all the fields get correct value when more fields are added into wifi_init_config_t
+  *               in future release. If you want to set your own initial values, overwrite the default values
+  *               which are set by WIFI_INIT_CONFIG_DEFAULT. Please be notified that the field 'magic' of
   *               wifi_init_config_t should always be WIFI_INIT_CONFIG_MAGIC!
   *
-  * @param  config pointer to WiFi init configuration structure; can point to a temporary variable.
+  * @param  config pointer to WiFi initialized configuration structure; can point to a temporary variable.
   *
   * @return
   *    - ESP_OK: succeed
@@ -275,7 +265,7 @@ esp_err_t esp_wifi_deinit(void);
   * @brief     Set the WiFi operating mode
   *
   *            Set the WiFi operating mode as station, soft-AP or station+soft-AP,
-  *            The default mode is soft-AP mode.
+  *            The default mode is station mode.
   *
   * @param     mode  WiFi operating mode
   *
@@ -506,7 +496,7 @@ esp_err_t esp_wifi_get_ps(wifi_ps_type_t *type);
   * @brief     Set protocol type of specified interface
   *            The default protocol is (WIFI_PROTOCOL_11B|WIFI_PROTOCOL_11G|WIFI_PROTOCOL_11N)
   *
-  * @attention Currently we only support 802.11b or 802.11bg or 802.11bgn mode
+  * @attention Support 802.11b or 802.11bg or 802.11bgn or LR mode
   *
   * @param     ifx  interfaces
   * @param     protocol_bitmap  WiFi protocol bitmap
@@ -1219,30 +1209,17 @@ esp_err_t esp_wifi_ftm_resp_set_offset(int16_t offset_cm);
 esp_err_t esp_wifi_config_11b_rate(wifi_interface_t ifx, bool disable);
 
 /**
-  * @brief      Config ESPNOW rate of specified interface
+  * @brief      Set wake interval for connectionless modules to wake up periodically.
   *
-  * @attention  1. This API should be called after esp_wifi_init() and before esp_wifi_start().
+  * @attention 1. Only one wake interval for all connectionless modules.
+  * @attention 2. This configuration could work at connected status.
+  *               When ESP_WIFI_STA_DISCONNECTED_PM_ENABLE is enabled, this configuration could work at disconnected status.
+  * @attention 3. Event WIFI_EVENT_CONNECTIONLESS_MODULE_WAKE_INTERVAL_START would be posted each time wake interval starts.
+  * @attention 4. Recommend to configure interval in multiples of hundred. (e.g. 100ms)
   *
-  * @param      ifx  Interface to be configured.
-  * @param      rate Only support 1M, 6M and MCS0_LGI
-  *
-  * @return
-  *    - ESP_OK: succeed
-  *    - others: failed
+  * @param      wake_interval  Milliseconds after would the chip wake up, from 1 to 65535.
   */
-esp_err_t esp_wifi_config_espnow_rate(wifi_interface_t ifx, wifi_phy_rate_t rate);
-
-/**
-  * @brief      Set interval for station to wake up periodically at disconnected.
-  *
-  * @attention 1. Only when ESP_WIFI_STA_DISCONNECTED_PM_ENABLE is enabled, this configuration could work
-  * @attention 2. This configuration only work for station mode and disconnected status
-  * @attention 3. This configuration would influence nothing until some module configure wake_window
-  * @attention 4. A sensible interval which is not too small is recommended (e.g. 100ms)
-  *
-  * @param      interval  how much micriosecond would the chip wake up, from 1 to 65535.
-  */
-esp_err_t esp_wifi_set_connectionless_wake_interval(uint16_t interval);
+esp_err_t esp_wifi_connectionless_module_set_wake_interval(uint16_t wake_interval);
 
 /**
   * @brief     configure country
@@ -1288,6 +1265,33 @@ esp_err_t esp_wifi_set_country_code(const char *country, bool ieee80211d_enabled
   *    - ESP_ERR_INVALID_ARG: invalid argument
   */
 esp_err_t esp_wifi_get_country_code(char *country);
+
+/**
+  * @brief      Config 80211 tx rate of specified interface
+  *
+  * @attention  1. This API should be called after esp_wifi_init() and before esp_wifi_start().
+  *
+  * @param      ifx  Interface to be configured.
+  * @param      rate Phy rate to be configured.
+  *
+  * @return
+  *    - ESP_OK: succeed
+  *    - others: failed
+  */
+esp_err_t esp_wifi_config_80211_tx_rate(wifi_interface_t ifx, wifi_phy_rate_t rate);
+
+/**
+  * @brief      Disable PMF configuration for specified interface
+  *
+  * @attention  This API should be called after esp_wifi_set_config() and before esp_wifi_start().
+  *
+  * @param      ifx  Interface to be configured.
+  *
+  * @return
+  *    - ESP_OK: succeed
+  *    - others: failed
+  */
+esp_err_t esp_wifi_disable_pmf_config(wifi_interface_t ifx);
 
 #ifdef __cplusplus
 }

@@ -1,8 +1,8 @@
 /*  Bluetooth Mesh */
 
 /*
- * Copyright (c) 2017 Intel Corporation
- * Additional Copyright (c) 2018 Espressif Systems (Shanghai) PTE LTD
+ * SPDX-FileCopyrightText: 2017 Intel Corporation
+ * SPDX-FileContributor: 2018-2021 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -77,7 +77,7 @@ static inline int bt_mesh_beacon_key(const uint8_t net_key[16],
 }
 
 int bt_mesh_beacon_auth(const uint8_t beacon_key[16], uint8_t flags,
-                        const uint8_t net_id[16], uint32_t iv_index,
+                        const uint8_t net_id[8], uint32_t iv_index,
                         uint8_t auth[8]);
 
 static inline int bt_mesh_app_id(const uint8_t app_key[16], uint8_t app_id[1])

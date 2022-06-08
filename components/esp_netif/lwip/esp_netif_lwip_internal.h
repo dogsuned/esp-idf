@@ -1,16 +1,8 @@
-// Copyright 2015-2018 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #pragma once
 
@@ -18,6 +10,7 @@
 #include "esp_netif_ppp.h"
 #include "esp_netif_slip.h"
 #include "lwip/netif.h"
+#include "dhcpserver/dhcpserver.h"
 
 #ifdef CONFIG_ESP_NETIF_TCPIP_LWIP
 
@@ -109,7 +102,9 @@ struct esp_netif_obj {
     void (*lwip_input_fn)(void *input_netif_handle, void *buffer, size_t len, void *eb);
     void * netif_handle;    // netif impl context (either vanilla lwip-netif or ppp_pcb)
     netif_related_data_t *related_data; // holds additional data for specific netifs
-
+#if ESP_DHCPS
+    dhcps_t *dhcps;
+#endif
     // io driver related
     void* driver_handle;
     esp_err_t (*driver_transmit)(void *h, void *buffer, size_t len);

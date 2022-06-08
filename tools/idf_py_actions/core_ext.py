@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2022 Espressif Systems (Shanghai) CO LTD
+# SPDX-License-Identifier: Apache-2.0
 import fnmatch
 import locale
 import os
@@ -28,6 +30,21 @@ def action_extensions(base_actions, project_path):
         ensure_build_directory(args, ctx.info_name)
         run_target(target_name, args)
 
+    def size_target(target_name, ctx, args):
+        """
+        Builds the app and then executes a size-related target passed in 'target_name'.
+        `tool_error_handler` handler is used to suppress errors during the build,
+        so size action can run even in case of overflow.
+
+        """
+
+        def tool_error_handler(e):
+            pass
+
+        ensure_build_directory(args, ctx.info_name)
+        run_target('all', args, custom_error_handler=tool_error_handler)
+        run_target(target_name, args)
+
     def list_build_system_targets(target_name, ctx, args):
         """Shows list of targets known to build sytem (make/ninja)"""
         build_target('help', ctx, args)
@@ -54,6 +71,10 @@ def action_extensions(base_actions, project_path):
             subprocess.check_output(GENERATORS[args.generator]['dry_run'] + [target_name], cwd=args.build_dir)
 
         except Exception:
+            if target_name in ['clang-check', 'clang-html-report']:
+                raise FatalError('command "{}" requires an additional plugin "pyclang". '
+                                 'Please install it via "pip install --upgrade pyclang"'.format(target_name))
+
             raise FatalError(
                 'command "%s" is not known to idf.py and is not a %s target' % (target_name, args.generator))
 
@@ -359,22 +380,19 @@ def action_extensions(base_actions, project_path):
                 'options': global_options,
             },
             'size': {
-                'callback': build_target,
+                'callback': size_target,
                 'help': 'Print basic size information about the app.',
                 'options': global_options,
-                'dependencies': ['app'],
             },
             'size-components': {
-                'callback': build_target,
+                'callback': size_target,
                 'help': 'Print per-component size information.',
                 'options': global_options,
-                'dependencies': ['app'],
             },
             'size-files': {
-                'callback': build_target,
+                'callback': size_target,
                 'help': 'Print per-source-file size information.',
                 'options': global_options,
-                'dependencies': ['app'],
             },
             'bootloader': {
                 'callback': build_target,
@@ -387,38 +405,28 @@ def action_extensions(base_actions, project_path):
                 'order_dependencies': ['clean', 'fullclean', 'reconfigure'],
                 'options': global_options,
             },
-            'efuse_common_table': {
+            'efuse-common-table': {
                 'callback': build_target,
-                'help': "Generate C-source for IDF's eFuse fields.",
+                'help': 'Generate C-source for IDF\'s eFuse fields.',
                 'order_dependencies': ['reconfigure'],
                 'options': global_options,
             },
-            'efuse_custom_table': {
+            'efuse-custom-table': {
                 'callback': build_target,
-                'help': "Generate C-source for user's eFuse fields.",
+                'help': 'Generate C-source for user\'s eFuse fields.',
                 'order_dependencies': ['reconfigure'],
                 'options': global_options,
             },
-            'show_efuse_table': {
+            'show-efuse-table': {
                 'callback': build_target,
                 'help': 'Print eFuse table.',
                 'order_dependencies': ['reconfigure'],
                 'options': global_options,
             },
-            'partition_table': {
+            'partition-table': {
                 'callback': build_target,
                 'help': 'Build only partition table.',
                 'order_dependencies': ['reconfigure'],
-                'options': global_options,
-            },
-            'erase_otadata': {
-                'callback': build_target,
-                'help': 'Erase otadata partition.',
-                'options': global_options,
-            },
-            'read_otadata': {
-                'callback': build_target,
-                'help': 'Read otadata partition.',
                 'options': global_options,
             },
             'build-system-targets': {
@@ -459,6 +467,11 @@ def action_extensions(base_actions, project_path):
                         'help': 'Chip target.'
                     }
                 ]
+            },
+            'save-defconfig': {
+                'callback': build_target,
+                'help': 'Generate a sdkconfig.defaults with options different from the default ones',
+                'options': global_options
             }
         }
     }

@@ -58,7 +58,7 @@ Support options for OpenOCD at compile time
 
 ESP-IDF has some support options for OpenOCD debugging which can be set at compile time:
 
-* :ref:`CONFIG_{IDF_TARGET_CFG_PREFIX}_DEBUG_OCDAWARE` is enabled by default. If a panic or unhandled exception is thrown and a JTAG debugger is connected (ie  OpenOCD is running), ESP-IDF will break into the debugger.
+* :ref:`CONFIG_ESP_DEBUG_OCDAWARE` is enabled by default. If a panic or unhandled exception is thrown and a JTAG debugger is connected (ie  OpenOCD is running), ESP-IDF will break into the debugger.
 
 * :ref:`CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK` (disabled by default) sets watchpoint index 1 (the second of two) at the end of any task stack. This is the most accurate way to debug task stack overflows. Click the link for more details.
 
@@ -285,4 +285,4 @@ In case you encounter a problem with OpenOCD or GDB programs itself and do not f
 4.  Attach both ``openocd_log.txt`` and ``gdb_log.txt`` files to your issue report.
 
 
-.. _OpenOCD Manual: http://openocd.org/doc/html/index.html
+.. _OpenOCD Manual: https://openocd.org/doc/html/index.html

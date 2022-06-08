@@ -5,21 +5,11 @@
  *
  * Adapted from the ssl_client1 example in mbedtls.
  *
- * Original Copyright (C) 2006-2016, ARM Limited, All Rights Reserved, Apache 2.0 License.
- * Additions Copyright (C) Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD, Apache 2.0 License.
+ * SPDX-FileCopyrightText: The Mbed TLS Contributors
  *
+ * SPDX-License-Identifier: Apache-2.0
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileContributor: 2015-2021 Espressif Systems (Shanghai) CO LTD
  */
 #include <string.h>
 #include <stdlib.h>
@@ -46,7 +36,6 @@
 #include "mbedtls/entropy.h"
 #include "mbedtls/ctr_drbg.h"
 #include "mbedtls/error.h"
-#include "mbedtls/certs.h"
 #include "esp_crt_bundle.h"
 
 
@@ -130,6 +119,11 @@ static void https_get_task(void *pvParameters)
     mbedtls_ssl_conf_rng(&conf, mbedtls_ctr_drbg_random, &ctr_drbg);
 #ifdef CONFIG_MBEDTLS_DEBUG
     mbedtls_esp_enable_debug_log(&conf, CONFIG_MBEDTLS_DEBUG_LEVEL);
+#endif
+
+#ifdef CONFIG_MBEDTLS_SSL_PROTO_TLS1_3
+    mbedtls_ssl_conf_min_version(&conf, MBEDTLS_SSL_MAJOR_VERSION_3, MBEDTLS_SSL_MINOR_VERSION_4);
+    mbedtls_ssl_conf_max_version(&conf, MBEDTLS_SSL_MAJOR_VERSION_3, MBEDTLS_SSL_MINOR_VERSION_4);
 #endif
 
     if ((ret = mbedtls_ssl_setup(&ssl, &conf)) != 0)

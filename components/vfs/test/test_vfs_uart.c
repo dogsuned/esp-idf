@@ -1,16 +1,8 @@
-// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -131,38 +123,38 @@ TEST_CASE("CRs are removed from the stdin correctly", "[vfs]")
     TEST_ASSERT_EQUAL_UINT8_ARRAY("4\n", dst, 2);
 }
 
+struct read_task_arg_t {
+    char* out_buffer;
+    size_t out_buffer_len;
+    SemaphoreHandle_t ready;
+    SemaphoreHandle_t done;
+};
+
+struct write_task_arg_t {
+    const char* str;
+    SemaphoreHandle_t done;
+};
+
+static void read_task_fn(void* varg)
+{
+    struct read_task_arg_t* parg = (struct read_task_arg_t*) varg;
+    parg->out_buffer[0] = 0;
+
+    fgets(parg->out_buffer, parg->out_buffer_len, stdin);
+    xSemaphoreGive(parg->done);
+    vTaskDelete(NULL);
+}
+
+static void write_task_fn(void* varg)
+{
+    struct write_task_arg_t* parg = (struct write_task_arg_t*) varg;
+    fwrite_str_loopback(parg->str, strlen(parg->str));
+    xSemaphoreGive(parg->done);
+    vTaskDelete(NULL);
+}
+
 TEST_CASE("can write to UART while another task is reading", "[vfs]")
 {
-    struct read_task_arg_t {
-        char* out_buffer;
-        size_t out_buffer_len;
-        SemaphoreHandle_t ready;
-        SemaphoreHandle_t done;
-    };
-
-    struct write_task_arg_t {
-        const char* str;
-        SemaphoreHandle_t done;
-    };
-
-    void read_task_fn(void* varg)
-    {
-        struct read_task_arg_t* parg = (struct read_task_arg_t*) varg;
-        parg->out_buffer[0] = 0;
-
-        fgets(parg->out_buffer, parg->out_buffer_len, stdin);
-        xSemaphoreGive(parg->done);
-        vTaskDelete(NULL);
-    }
-
-    void write_task_fn(void* varg)
-    {
-        struct write_task_arg_t* parg = (struct write_task_arg_t*) varg;
-        fwrite_str_loopback(parg->str, strlen(parg->str));
-        xSemaphoreGive(parg->done);
-        vTaskDelete(NULL);
-    }
-
     char out_buffer[32];
     size_t out_buffer_len = sizeof(out_buffer);
 
@@ -223,7 +215,7 @@ TEST_CASE("Can use termios for UART", "[vfs]")
         .parity    = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,
+        .source_clk = UART_SCLK_DEFAULT,
     };
     uart_driver_install(UART_NUM_1, 256, 256, 0, NULL, 0);
     uart_param_config(UART_NUM_1, &uart_config);

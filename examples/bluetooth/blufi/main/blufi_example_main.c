@@ -1,10 +1,8 @@
 /*
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
+ * SPDX-FileCopyrightText: 2021 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Unlicense OR CC0-1.0
+ */
 
 
 /****************************************************************************
@@ -385,23 +383,11 @@ void app_main(void)
         return;
     }
 
-    ret = esp_blufi_host_init();
+    ret = esp_blufi_host_and_cb_init(&example_callbacks);
     if (ret) {
-        BLUFI_ERROR("%s initialise host failed: %s\n", __func__, esp_err_to_name(ret));
+        BLUFI_ERROR("%s initialise failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
 
     BLUFI_INFO("BLUFI VERSION %04x\n", esp_blufi_get_version());
-
-    ret = esp_blufi_register_callbacks(&example_callbacks);
-    if(ret){
-        BLUFI_ERROR("%s blufi register failed, error code = %x\n", __func__, ret);
-        return;
-    }
-
-    ret = esp_blufi_gap_register_callback();
-    if(ret){
-        BLUFI_ERROR("%s gap register failed, error code = %x\n", __func__, ret);
-        return;
-    }
 }

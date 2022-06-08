@@ -1,16 +1,8 @@
-// Copyright 2017-2021 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2017-2022 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 #ifndef _SOC_I2S_STRUCT_H_
 #define _SOC_I2S_STRUCT_H_
 
@@ -20,7 +12,7 @@
 extern "C" {
 #endif
 
-typedef volatile struct {
+typedef volatile struct i2s_dev_s {
     uint32_t reserved_0;
     uint32_t reserved_4;
     uint32_t reserved_8;
@@ -318,8 +310,8 @@ typedef volatile struct {
             uint32_t reserved12                    :    20;  /* Reserved*/
         };
         uint32_t val;
-    } rxeof_num;
-    uint32_t conf_sigle_data;
+    } rx_eof_num;
+    uint32_t conf_single_data;                               /*the right channel or left channel put out constant value stored in this register according to tx_chan_mod and reg_tx_msb_right*/
     union {
         struct {
             uint32_t tx_idle                       :    1;  /*1: i2s_tx is idle state. 0: i2s_tx is working.*/

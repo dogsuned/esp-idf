@@ -2,19 +2,11 @@
  Driver bits for PSRAM chips (at the moment only the ESP-PSRAM32 chip).
 */
 
-// Copyright 2013-2017 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2013-2022 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 
 #include "sdkconfig.h"
@@ -32,17 +24,16 @@
 #include "soc/dport_reg.h"
 #include "soc/efuse_periph.h"
 #include "soc/soc_caps.h"
+#include "soc/spi_reg.h"
 #include "soc/io_mux_reg.h"
-#include "soc/apb_ctrl_reg.h"
+#include "soc/syscon_reg.h"
 #include "soc/efuse_reg.h"
 #include "soc/soc.h"
 #include "driver/gpio.h"
 #include "driver/spi_common_internal.h"
 #include "driver/spi_common.h"
-#include "driver/periph_ctrl.h"
+#include "esp_private/periph_ctrl.h"
 #include "bootloader_common.h"
-
-#if CONFIG_SPIRAM
 #include "soc/rtc.h"
 
 static const char* TAG = "psram";
@@ -165,8 +156,15 @@ typedef enum {
 typedef esp_rom_spi_cmd_t psram_cmd_t;
 
 static uint32_t s_psram_id = 0;
-static void IRAM_ATTR psram_cache_init(psram_cache_mode_t psram_cache_mode, psram_vaddr_mode_t vaddrmode);
+static void psram_cache_init(psram_cache_mode_t psram_cache_mode, psram_vaddr_mode_t vaddrmode);
 extern void esp_rom_spi_set_op_mode(int spi_num, esp_rom_spiflash_read_mode_t mode);
+
+static uint8_t s_psram_cs_io = (uint8_t)-1;
+
+uint8_t psram_get_cs_io(void)
+{
+    return s_psram_cs_io;
+}
 
 static void psram_set_op_mode(int spi_num, psram_cmd_mode_t mode)
 {
@@ -375,20 +373,7 @@ static void IRAM_ATTR psram_gpio_config(psram_cache_mode_t mode)
         psram_io.psram_spiwp_sd3_io = esp_rom_efuse_get_flash_wp_gpio();
     }
     esp_rom_spiflash_select_qio_pins(psram_io.psram_spiwp_sd3_io, spiconfig);
-}
-
-psram_size_t psram_get_size(void)
-{
-    if ((PSRAM_SIZE_ID(s_psram_id) == PSRAM_EID_SIZE_64MBITS) || PSRAM_IS_64MBIT_TRIAL(s_psram_id)) {
-        return PSRAM_SIZE_64MBITS;
-    } else if (PSRAM_SIZE_ID(s_psram_id) == PSRAM_EID_SIZE_32MBITS) {
-        return PSRAM_SIZE_32MBITS;
-    } else if (PSRAM_SIZE_ID(s_psram_id) == PSRAM_EID_SIZE_16MBITS) {
-        return PSRAM_SIZE_16MBITS;
-    } else {
-        return PSRAM_SIZE_MAX;
-    }
-    return PSRAM_SIZE_MAX;
+    s_psram_cs_io = psram_io.psram_cs_io;
 }
 
 //used in UT only
@@ -541,4 +526,36 @@ static void IRAM_ATTR psram_cache_init(psram_cache_mode_t psram_cache_mode, psra
 
     CLEAR_PERI_REG_MASK(SPI_MEM_MISC_REG(0), SPI_MEM_CS1_DIS_M); //ENABLE SPI0 CS1 TO PSRAM(CS0--FLASH; CS1--SRAM)
 }
-#endif // CONFIG_SPIRAM
+
+
+/*---------------------------------------------------------------------------------
+ * Following APIs are not required to be IRAM-Safe
+ *
+ * Consider moving these to another file if this kind of APIs grows dramatically
+ *-------------------------------------------------------------------------------*/
+esp_err_t psram_get_physical_size(uint32_t *out_size_bytes)
+{
+    if (!out_size_bytes) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if ((PSRAM_SIZE_ID(s_psram_id) == PSRAM_EID_SIZE_64MBITS) || PSRAM_IS_64MBIT_TRIAL(s_psram_id)) {
+        *out_size_bytes = PSRAM_SIZE_8MB;
+    } else if (PSRAM_SIZE_ID(s_psram_id) == PSRAM_EID_SIZE_32MBITS) {
+        *out_size_bytes = PSRAM_SIZE_4MB;
+    } else if (PSRAM_SIZE_ID(s_psram_id) == PSRAM_EID_SIZE_16MBITS) {
+        *out_size_bytes = PSRAM_SIZE_2MB;
+    } else {
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+    return ESP_OK;
+}
+
+/**
+ * This function is to get the available physical psram size in bytes.
+ * On ESP32S2, all of the PSRAM physical region are available
+ */
+esp_err_t psram_get_available_size(uint32_t *out_size_bytes)
+{
+    return psram_get_physical_size(out_size_bytes);
+}

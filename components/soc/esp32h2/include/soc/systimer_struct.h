@@ -1,16 +1,7 @@
-/** Copyright 2021 Espressif Systems (Shanghai) PTE LTD
+/*
+ * SPDX-FileCopyrightText: 2020-2021 Espressif Systems (Shanghai) CO LTD
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -88,6 +79,7 @@ typedef union {
          *  update timer_unit0
          */
         uint32_t timer_unit_update: 1;
+        uint32_t reserved31: 1;
     };
     uint32_t val;
 } systimer_unit_op_reg_t;
@@ -102,6 +94,7 @@ typedef struct {
              *  timer unit load high 32 bit
              */
             uint32_t timer_unit_load_hi: 20;
+            uint32_t reserved20: 12;
         };
         uint32_t val;
     } hi;
@@ -126,6 +119,7 @@ typedef struct {
              *  timer target high 32 bit
              */
             uint32_t timer_target_hi: 20;
+            uint32_t reserved20: 12;
         };
         uint32_t val;
     } hi;
@@ -172,6 +166,7 @@ typedef struct {
              *  timer read value high 20bit
              */
             uint32_t timer_unit_value_hi: 20;
+            uint32_t reserved20: 12;
         };
         uint32_t val;
     } hi;
@@ -195,6 +190,7 @@ typedef union {
          *  timer comp load value
          */
         uint32_t timer_comp_load: 1;
+        uint32_t reserved1: 31;
     };
     uint32_t val;
 } systimer_comp_load_reg_t;
@@ -208,6 +204,7 @@ typedef union {
          *  timer unit load value
          */
         uint32_t timer_unit_load: 1;
+        uint32_t reserved1: 31;
     };
     uint32_t val;
 } systimer_unit_load_reg_t;
@@ -230,6 +227,7 @@ typedef union {
          *  interupt2 enable
          */
         uint32_t target2_int_ena: 1;
+        uint32_t reserved3: 29;
     };
     uint32_t val;
 } systimer_int_ena_reg_t;
@@ -251,6 +249,7 @@ typedef union {
          *  interupt2 raw
          */
         uint32_t target2_int_raw: 1;
+        uint32_t reserved3: 29;
     };
     uint32_t val;
 } systimer_int_raw_reg_t;
@@ -272,6 +271,7 @@ typedef union {
          *  interupt2 clear
          */
         uint32_t target2_int_clr: 1;
+        uint32_t reserved3: 29;
     };
     uint32_t val;
 } systimer_int_clr_reg_t;
@@ -293,6 +293,7 @@ typedef union {
          *  reg_target2_int_st
          */
         uint32_t target2_int_st: 1;
+        uint32_t reserved3: 29;
     };
     uint32_t val;
 } systimer_int_st_reg_t;

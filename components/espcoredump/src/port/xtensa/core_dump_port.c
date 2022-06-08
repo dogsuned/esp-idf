@@ -1,16 +1,8 @@
-// Copyright 2015-2019 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /**
  * @file
@@ -27,10 +19,12 @@
 #include "esp_core_dump_common.h"
 #include "esp_core_dump_port.h"
 #include "esp_debug_helpers.h"
+#include "esp_cpu_utils.h"
 
 const static DRAM_ATTR char TAG[] __attribute__((unused)) = "esp_core_dump_port";
 
 #define min(a,b) ((a) < (b) ? (a) : (b))
+#define max(a,b) ((a) < (b) ? (b) : (a))
 
 #define COREDUMP_EM_XTENSA                  0x5E
 #define COREDUMP_INVALID_CAUSE_VALUE        0xFFFF
@@ -163,7 +157,12 @@ static void *esp_core_dump_get_fake_stack(uint32_t *stk_len)
 
 static core_dump_reg_pair_t *esp_core_dump_get_epc_regs(core_dump_reg_pair_t* src)
 {
+#pragma GCC diagnostic push
+#if     __GNUC__ >= 9
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+#endif
     uint32_t* reg_ptr = (uint32_t*)src;
+#pragma GCC diagnostic pop
     // get InterruptException program counter registers
     COREDUMP_GET_EPC(EPC_1, reg_ptr);
     COREDUMP_GET_EPC(EPC_2, reg_ptr);
@@ -177,7 +176,12 @@ static core_dump_reg_pair_t *esp_core_dump_get_epc_regs(core_dump_reg_pair_t* sr
 
 static core_dump_reg_pair_t *esp_core_dump_get_eps_regs(core_dump_reg_pair_t* src)
 {
+#pragma GCC diagnostic push
+#if     __GNUC__ >= 9
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+#endif
     uint32_t* reg_ptr = (uint32_t*)src;
+#pragma GCC diagnostic pop
     // get InterruptException processor state registers
     COREDUMP_GET_EPS(EPS_2, reg_ptr);
     COREDUMP_GET_EPS(EPS_3, reg_ptr);
@@ -228,7 +232,7 @@ static esp_err_t esp_core_dump_get_regs_from_stack(void* stack_addr,
             regs->ar[i] = stack_arr[XT_STK_AR_START + i];
         }
         regs->sar = exc_frame->sar;
-#if CONFIG_IDF_TARGET_ESP32
+#if XCHAL_HAVE_LOOPS
         regs->lbeg = exc_frame->lbeg;
         regs->lend = exc_frame->lend;
         regs->lcount = exc_frame->lcount;
@@ -346,8 +350,9 @@ bool esp_core_dump_mem_seg_is_sane(uint32_t addr, uint32_t sz)
 uint32_t esp_core_dump_get_stack(core_dump_task_header_t *task,
                                  uint32_t* stk_vaddr, uint32_t* stk_paddr)
 {
-    const uint32_t stack_len = abs(task->stack_start - task->stack_end);
     const uint32_t stack_addr = min(task->stack_start, task->stack_end);
+    const uint32_t stack_addr2 = max(task->stack_start, task->stack_end);
+    const uint32_t stack_len = stack_addr2 - stack_addr;
 
     ESP_COREDUMP_DEBUG_ASSERT(stk_paddr != NULL && stk_vaddr != NULL);
 
@@ -531,7 +536,8 @@ void esp_core_dump_summary_parse_backtrace_info(esp_core_dump_bt_info_t *bt_info
     frame.next_pc = stack->a0;
 
     corrupted = !(esp_stack_ptr_is_sane(frame.sp) &&
-                esp_ptr_executable((void *)esp_cpu_process_stack_pc(frame.pc)));
+                (esp_ptr_executable((void *)esp_cpu_process_stack_pc(frame.pc)) ||
+                stack->exccause == EXCCAUSE_INSTR_PROHIBITED)); /* Ignore the first corrupted PC in case of InstrFetchProhibited */
 
     /* vaddr is actual stack address when crash occurred. However that stack is now saved
      * in the flash at a different location. Hence for each SP, we need to adjust the offset

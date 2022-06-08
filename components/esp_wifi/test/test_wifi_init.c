@@ -7,6 +7,7 @@
 #include "nvs_flash.h"
 #include "test_utils.h"
 #include "freertos/event_groups.h"
+#include "unity_test_utils.h"
 
 #define GOT_IP_EVENT        0x00000001
 #define DISCONNECT_EVENT    0x00000002
@@ -103,6 +104,7 @@ static void wifi_driver_can_start_on_APP_CPU_task(void* arg)
 
 TEST_CASE("wifi driver can start on APP CPU", "[wifi_init]")
 {
+    test_case_uses_tcpip();
     TaskHandle_t th = NULL;
     SemaphoreHandle_t sema = xSemaphoreCreateBinary();
     TEST_ASSERT_NOT_NULL(sema);
@@ -116,7 +118,7 @@ TEST_CASE("wifi driver can start on APP CPU", "[wifi_init]")
     xSemaphoreTake(sema, portMAX_DELAY);
     vSemaphoreDelete(sema);
     sema = NULL;
-    test_utils_task_delete(th);
+    unity_utils_task_delete(th);
 }
 
 static void wifi_start_stop_task(void* arg)
@@ -169,7 +171,7 @@ TEST_CASE("Calling esp_wifi_stop() with start", "[wifi_init]")
     xSemaphoreTake(sema, portMAX_DELAY);
     vSemaphoreDelete(sema);
     sema = NULL;
-    test_utils_task_delete(th);
+    unity_utils_task_delete(th);
 }
 
 static void wifi_stop_task(void* arg)
@@ -205,6 +207,7 @@ static void wifi_stop_task(void* arg)
 
 TEST_CASE("Calling esp_wifi_stop() without start", "[wifi_init]")
 {
+    test_case_uses_tcpip();
     TaskHandle_t th = NULL;
     SemaphoreHandle_t sema = xSemaphoreCreateBinary();
     TEST_ASSERT_NOT_NULL(sema);
@@ -218,7 +221,7 @@ TEST_CASE("Calling esp_wifi_stop() without start", "[wifi_init]")
     xSemaphoreTake(sema, portMAX_DELAY);
     vSemaphoreDelete(sema);
     sema = NULL;
-    test_utils_task_delete(th);
+    unity_utils_task_delete(th);
 }
 
 static void wifi_deinit_task(void* arg)
@@ -271,5 +274,5 @@ TEST_CASE("Calling esp_wifi_deinit() without stop", "[wifi_init]")
     xSemaphoreTake(sema, portMAX_DELAY);
     vSemaphoreDelete(sema);
     sema = NULL;
-    test_utils_task_delete(th);
+    unity_utils_task_delete(th);
 }
